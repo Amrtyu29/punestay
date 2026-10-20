@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PuneStay · Nearby Services (plain HTML, CSS and JavaScript)</title>
+  <meta name="description" content="Nearby Services WebGIS for Pune: pick a point, choose a category, and get the closest places from PostGIS, drawn with Leaflet." />
+  <link rel="icon" href="../icon.svg" type="image/svg+xml" />
+  <!-- Leaflet from a CDN: no build step, no framework -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="../">
+      <span class="brand-mark">&#9679;</span>
+      <span>
+        <strong>Pune<em>Stay</em></strong>
+        <small>Nearby Services WebGIS</small>
+      </span>
+    </a>
+    <nav class="nav">
+      <a href="../">Full app (React)</a>
+      <a class="on" href="./">Plain HTML version</a>
+      <a href="http://localhost:8080/geoserver" target="_blank" rel="noopener">GeoServer</a>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <!-- ============ left panel ============ -->
+    <aside class="panel">
+      <section class="card">
+        <h1>Nearby services</h1>
+        <p class="muted">Pick a point, choose what you need, and get the closest places sorted by distance.</p>
+
+        <h2><span class="step">1</span> Where</h2>
+        <div class="row">
+          <button id="btn-locate" class="btn primary" type="button">Use my location</button>
+          <span class="muted small">or click the map</span>
+        </div>
+        <div class="grid-3">
+          <label>Latitude <input id="lat" type="text" inputmode="decimal" placeholder="18.5204" /></label>
+          <label>Longitude <input id="lng" type="text" inputmode="decimal" placeholder="73.8567" /></label>
+          <button id="btn-go" class="btn" type="button">Go</button>
+        </div>
+        <p id="origin-note" class="muted small"></p>
+
+        <h2><span class="step">2</span> What</h2>
+        <label>Category
+          <select id="category"><option value="">All services</option></select>
+        </label>
+        <label id="sub-wrap" hidden>Subcategory
+          <select id="subcategory"><option value="">Any</option></select>
+        </label>
+
+        <h2><span class="step">3</span> How far</h2>
+        <div class="segmented" id="mode">
+          <button type="button" data-mode="radius" class="on">Within radius</button>
+          <button type="button" data-mode="nearest">Nearest N</button>
+          <button type="button" data-mode="both">Both</button>
+        </div>
+        <div class="grid-2">
+          <label id="radius-wrap">Radius
+            <select id="radius">
+              <option value="500">500 m</option><option value="1000">1 km</option>
+              <option value="2000" selected>2 km</option><option value="3000">3 km</option>
+              <option value="5000">5 km</option><option value="10000">10 km</option>
+            </select>
+          </label>
+          <label id="n-wrap" hidden>Nearest
+            <select id="n">
+              <option value="5">5</option><option value="10" selected>10</option>
+              <option value="20">20</option><option value="50">50</option><option value="100">100</option>
+            </select>
+          </label>
+        </div>
+        <button id="btn-search" class="btn primary block" type="button" disabled>Search</button>
+      </section>
+
+      <section class="card">
+        <h2>GeoServer layers (WMS)</h2>
+        <label class="switch"><input id="wms-services" type="checkbox" /> <span>All services</span></label>
+        <label class="switch"><input id="wms-listings" type="checkbox" /> <span>PG and hostel listings</span></label>
+      </section>
+
+      <section class="card">
+        <h2 id="results-title">Results</h2>
+        <div id="message" class="message" hidden></div>
+        <p id="results-empty" class="muted small">Choose a location to see services here.</p>
+        <ol id="results" class="results"></ol>
+      </section>
+    </aside>
+
+    <!-- ============ map ============ -->
+    <div id="map" class="map" role="application" aria-label="Map. Click to set the search origin."></div>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="app.js"></script>
+</body>
+</html>

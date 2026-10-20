@@ -397,6 +397,12 @@ python backend\tests\smoke_api.py
 
 ## Nearby Services (course brief, Project 1)
 
+A second implementation of the same page in **plain HTML, CSS and JavaScript** (no framework, no build step)
+lives in `frontend/public/plain/` (`index.html`, `style.css`, `app.js`): open http://localhost:5173/plain/index.html
+while the dev server runs, or `dist/plain/index.html` after a build. It uses Leaflet from a CDN and the same
+`/nearby` API, supports links such as `plain/index.html?lat=18.52&lng=73.85&category=hospital&radius=1000`, and
+is the version to read when the question is "how does the Nearby Services page work line by line".
+
 The brief's required system is the `#/nearby` page, built with **Leaflet**, backed by `GET /nearby` and
 **GeoServer** layers. PuneStay's rental map is the extension on top of it. The same search also lives on the
 home map as the **Nearby** sidebar tab and header button (shared logic in `frontend/src/nearby.js`), so services

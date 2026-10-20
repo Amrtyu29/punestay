@@ -154,6 +154,7 @@ export default function NearbyPage() {
             <div>
               <h1>Nearby services</h1>
               <p>Pick a point, choose what you need, and get the closest places sorted by distance.</p>
+              <p><a className="link" href="/plain/index.html">Plain HTML, CSS and JavaScript version →</a></p>
             </div>
           </div>
 

@@ -1,0 +1,12 @@
+{
+  "name": "PuneStay",
+  "short_name": "PuneStay",
+  "description": "PGs, hostels and flats in Pune near your college or office",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f4f0",
+  "theme_color": "#0f766e",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

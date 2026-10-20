@@ -1,0 +1,21 @@
+# secrets and local config
+.env
+.claude/settings.local.json
+
+# python
+.venv/
+__pycache__/
+*.pyc
+
+# node / build
+frontend/node_modules/
+frontend/dist/
+
+# user uploads (photos) and local caches
+uploads/*
+!uploads/.gitkeep
+data/overture/*.parquet
+*.log
+
+# office temp files
+~$*

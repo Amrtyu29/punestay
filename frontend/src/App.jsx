@@ -14,7 +14,6 @@ import AuthModal from './components/AuthModal'
 import AddListingPage from './pages/AddListingPage'
 import MyListingsPage from './pages/MyListingsPage'
 import ComparePage from './pages/ComparePage'
-import NearbyPage from './pages/NearbyPage'
 import AdminPage from './pages/AdminPage'
 import SafetyReportModal from './components/SafetyReportModal'
 import DirectionsPanel from './components/DirectionsPanel'
@@ -60,10 +59,9 @@ export default function App() {
       {page === 'edit' && <AddListingPage key={`edit-${route.arg}`} editId={route.arg} onNeedSignIn={() => setAuthModal('login')} />}
       {page === 'mine' && <MyListingsPage onNeedSignIn={() => setAuthModal('login')} />}
       {page === 'compare' && <ComparePage destination={destination} onDestination={setDestination} />}
-      {page === 'nearby' && <NearbyPage />}
       {page === 'admin' && <AdminPage onNeedSignIn={() => setAuthModal('login')} />}
       {page === 'saved' && <SavedPage />}
-      {!onMap && !['add', 'edit', 'mine', 'compare', 'nearby', 'admin', 'saved'].includes(page) && <NotFound page={page} />}
+      {!onMap && !['add', 'edit', 'mine', 'compare', 'admin', 'saved'].includes(page) && <NotFound page={page} />}
 
       {authModal && <AuthModal mode={authModal} onClose={() => setAuthModal(null)} />}
     </div>
@@ -87,7 +85,7 @@ function MapNav() {
   return (
     <nav className="map-nav" aria-label="Pages">
       <a className="on" href={href('/')}><Map size={15} /> Map</a>
-      <a href={href('/nearby')}><Search size={15} /> Nearby services</a>
+      <a href="/" title="PuneStay Sonar: the Nearby Services page"><Search size={15} /> Nearby services</a>
       <a href={href('/compare')}><ChartColumn size={15} /> Compare areas</a>
       <a href={href('/saved')}><Bookmark size={15} /> Saved</a>
     </nav>

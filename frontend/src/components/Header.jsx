@@ -29,7 +29,7 @@ export default function Header({ page, destination, onDestination, count, loadin
           : (
             <nav className="nav">
               <a className={`nav-link${page === 'map' ? ' on' : ''}`} href={href('/')}><Map size={16} /> Map</a>
-              <a className={`nav-link${page === 'nearby' ? ' on' : ''}`} href={href('/nearby')}><Search size={16} /> Nearby services</a>
+              <a className="nav-link" href="/" title="PuneStay Sonar: the Nearby Services page"><Search size={16} /> Nearby services</a>
               <a className={`nav-link${page === 'compare' ? ' on' : ''}`} href={href('/compare')}><ChartColumn size={16} /> Compare areas</a>
               <a className={`nav-link${page === 'saved' ? ' on' : ''}`} href={href('/saved')}><Bookmark size={16} /> Saved</a>
               {user && <a className={`nav-link${page === 'mine' ? ' on' : ''}`} href={href('/mine')}>My listings</a>}
@@ -100,7 +100,7 @@ function UserMenu({ user, onLogout, page }) {
         <div className="menu" role="menu">
           <div className="menu-head"><b>{user.name}</b><br /><span className="muted small">{user.email} · {user.role}</span></div>
           <a role="menuitem" className={`menu-item${page === 'mine' ? ' on' : ''}`} href={href('/mine')} onClick={() => setOpen(false)}>My listings</a>
-          <a role="menuitem" className={`menu-item${page === 'nearby' ? ' on' : ''}`} href={href('/nearby')} onClick={() => setOpen(false)}>Nearby services</a>
+          <a role="menuitem" className="menu-item" href="/" onClick={() => setOpen(false)}>Nearby services (Sonar)</a>
           <a role="menuitem" className={`menu-item${page === 'compare' ? ' on' : ''}`} href={href('/compare')} onClick={() => setOpen(false)}>Compare areas</a>
           {user.role === 'admin' && <a role="menuitem" className="menu-item" href={href('/admin')} onClick={() => setOpen(false)}>Admin</a>}
           <button role="menuitem" type="button" className="menu-item" onClick={() => { setOpen(false); onLogout() }}><LogOut size={14} /> Sign out</button>

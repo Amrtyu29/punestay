@@ -29,7 +29,8 @@ npm run dev --prefix frontend
 powershell -ExecutionPolicy Bypass -File scripts\geoserver_start.ps1
 ```
 
-Then open http://localhost:5173 (the course-brief page is http://localhost:5173/#/nearby). Admin account for the local database: `admin@punestay.in`
+Then open http://localhost:5173 (PuneStay Sonar, the course-brief Nearby Services page) and http://localhost:5173/app/
+(the PuneStay map app with listings, directions, compare, admin). Admin account for the local database: `admin@punestay.in`
 with password `admin-password-123` (created by the smoke test; change it before any deployment).
 Admin registration needs both `ADMIN_EMAIL` and `ADMIN_SETUP_TOKEN` in `.env`, and the token must be
 sent as `admin_token` when registering. `JWT_SECRET` must be set in `.env` too; without it the API
@@ -128,17 +129,7 @@ If Overpass is busy you can rerun just the failed ones, for example
 python scripts\load_pois.py
 ```
 
-### 6. Your own collected listings (optional)
-
-`data/seed_listings.csv` is empty on purpose (only the header). Add rows only for places you have
-actually visited or called, with the rent they quoted (leave `lat`,`lng` blank to geocode by
-address), then:
-
-```bash
-python scripts\load_seed_listings.py
-```
-
-### 6b. Real listings from OpenStreetMap
+### 6. Real listings from OpenStreetMap
 
 OSM already has about 110 genuine private PGs, hostels and co-living buildings in Pune
 (`fetch_overpass.py lodging`). The importer turns them into `unverified` listings with
@@ -397,37 +388,34 @@ python backend\tests\smoke_api.py
 
 ## Nearby Services (course brief, Project 1)
 
-A second implementation of the same page in **plain HTML, CSS and JavaScript** (no framework, no build step),
-called **PuneStay Sonar**, lives in `frontend/public/plain/` (`index.html`, `css/style.css`, `js/app.js`): open
-http://localhost:5173/plain/index.html while the dev server runs, or `dist/plain/index.html` after a build. It uses
-Leaflet, Leaflet.markercluster, Leaflet.heat and Lucide icons from CDNs and the same `/nearby`, `/nearby/categories`
-and `/geocode` API. It adds an intro screen, a first-visit tour, a help modal with shortcuts, address and PIN-code
-search, glass panels with a dark and a light theme, five basemaps, a heatmap and per-category GeoServer WMS overlays
-(CQL filters on the `services` view), a **PGs & hostels** category that searches PuneStay's own listings through
-`GET /listings/nearby` (same parameters as `/nearby`, plus `type` and `gender`; `GET /listings/nearby/summary` gives the
-counts), CSV and GeoJSON downloads, shareable links such as
-`plain/index.html?lat=18.52&lng=73.85&category=hospital&radius=1000`, and a bottom sheet on phones. It is the
-version to read when the question is "how does the Nearby Services page work line by line".
+The brief's required system is **PuneStay Sonar**, the home page at http://localhost:5173, written in plain HTML,
+CSS and JavaScript with no framework and no build step: `frontend/index.html`, `frontend/public/css/style.css` and
+`frontend/public/js/app.js`. It uses Leaflet, Leaflet.markercluster, Leaflet.heat and Lucide icons from CDNs and
+the `/nearby`, `/nearby/categories`, `/geocode` and `/listings/nearby` API. It has an intro screen, a first-visit
+tour, a help modal with shortcuts, address and PIN-code search, glass panels with a dark and a light theme, five
+basemaps, a heatmap and per-category GeoServer WMS overlays (CQL filters on the `services` view), a **PGs & hostels**
+category that searches PuneStay's own listings (`GET /listings/nearby`, same parameters as `/nearby` plus `type` and
+`gender`; `GET /listings/nearby/summary` gives the counts) with an in-page detail panel, CSV and GeoJSON downloads,
+shareable links such as `/?lat=18.52&lng=73.85&category=hospital&radius=1000`, and a bottom sheet on phones.
 
-The brief's required system is the `#/nearby` page, built with **Leaflet**, backed by `GET /nearby` and
-**GeoServer** layers. PuneStay's rental map is the extension on top of it. The same search also lives on the
-home map as the **Nearby** sidebar tab and header button (shared logic in `frontend/src/nearby.js`), so services
-can be looked up next to the PG pins without leaving the main page.
+The React map app at http://localhost:5173/app/ (`frontend/app/index.html`, `frontend/src/`) is the extension:
+listings with clustering and cards, commute filters and directions, the rent heatmap, compare areas, saved places,
+adding and claiming listings with the trust rules, and the admin pages. Its home map also has a **Nearby** sidebar
+tab that reuses the same `/nearby` query (`frontend/src/nearby.js`).
 
-The UI ships in a Dark Charcoal + Teal theme by default, with a light theme behind the sun/moon button in the header
-(`frontend/src/theme.js`). The Nearby page shows the current Pune weather from the free Open-Meteo API (city centre
-only, nothing about the viewer is sent).
+Both front ends ship in a Dark Charcoal + Teal theme by default, with a light theme behind the sun/moon button
+(`frontend/src/theme.js` in the app; CSS variables in Sonar). Sonar follows the system theme until you choose.
 
-Both maps offer Google-Maps-style map types (`frontend/src/basemaps.js`): Streets, Light and Dark vector styles from
-OpenFreeMap, Esri World Imagery with a labels overlay for Satellite, OpenTopoMap for Terrain, and plain OSM. The home
-map also has a **Directions** tool in the header: from a college / office (or the phone's location) to the selected
+Both front ends offer Google-Maps-style map types (`frontend/src/basemaps.js` in the app, the Layers panel in Sonar):
+Streets, Light and Dark, Esri World Imagery with a labels overlay for Satellite, OpenTopoMap for Terrain, and plain
+OSM. The app's home map also has a **Directions** tool in the header: from a college / office (or the phone's location) to the selected
 PG by car, bike or foot, using the same OSRM route endpoint, with a link to open the trip in Google Maps.
 
 | Brief requirement | Where |
 |---|---|
-| Location by map click, lat/lng, browser geolocation | `frontend/src/pages/NearbyPage.jsx` (click, typed form with validation, "Use my location" with denied / unavailable / timeout messages) |
+| Location by map click, lat/lng, browser geolocation | `frontend/public/js/app.js` (map click and drag, coordinates popover with per-field validation, "Use my location" with denied / unavailable / timeout / insecure-context messages, address and PIN search) |
 | Category and subcategory filtering | `GET /nearby/categories` lists 20 categories with OSM subcategories (hospital vs clinic, atm vs bank, fuel vs charging station, ...) |
-| Radius and/or nearest-N | `GET /nearby?radius_m=&limit=` ; the page offers "Within radius", "Nearest N" and "Both" |
+| Radius and/or nearest-N | `GET /nearby?radius_m=&limit=` ; Sonar offers "Within a radius" (slider with a live ring) and "Nearest N" (dashed ring to the farthest result) |
 | Distance-sorted list synced with markers | list rows and Leaflet markers highlight each other; popups show details |
 | PostGIS query with proper CRS | points stored in EPSG:4326, distances with the `geography` type (metres on the WGS84 ellipsoid), KNN ordering on the GIST index |
 | GeoServer layers | workspace `punestay`: `services`, `pois`, `listings_public`, `destinations`, `safety_reports`, `wards` (WMS + WFS); switchable WMS overlays on the page |

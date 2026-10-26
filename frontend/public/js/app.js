@@ -470,7 +470,7 @@
       .then(function (fc) {
         clearTimeout(timeout); t.dismiss();
         state.results = fc.features || [];
-        if (isStay()) state.results.forEach(function (f) { f.properties.listing = true; f.properties.link = '../#/listing/' + f.properties.id; });
+        if (isStay()) state.results.forEach(function (f) { f.properties.listing = true; f.properties.link = '/app/#/listing/' + f.properties.id; });
         state.activeId = null;
         $('api-banner').hidden = true;
         render();
@@ -718,7 +718,7 @@
           (/^https?:\/\//i.test(l.website || '') ? '<a class="btn" href="' + esc(l.website) + '" target="_blank" rel="noopener">' + ic('globe') + ' Website</a>' : '') +
           '<a class="btn" href="' + directionsUrl(pos) + '" target="_blank" rel="noopener">' + ic('navigation') + ' Directions</a>' +
         '</div>' +
-        '<p class="d-foot">To confirm, flag, claim or edit this place, open it in the <a href="../#/listing/' + l.id + '" target="_blank" rel="noopener">PuneStay app</a>.</p>' +
+        '<p class="d-foot">To confirm, flag, claim or edit this place, open it in the <a href="/app/#/listing/' + l.id + '" target="_blank" rel="noopener">PuneStay app</a>.</p>' +
       '</div>';
     detailBody.innerHTML = h;
     icons();

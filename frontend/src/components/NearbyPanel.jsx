@@ -98,7 +98,7 @@ export default function NearbyPanel({ nb, onHover }) {
         </section>
       </div>
       <div className="sidebar-footer">
-        <a className="btn ghost sm" href="#/nearby"><ExternalLink size={13} /> Open the full Leaflet + GeoServer page</a>
+        <a className="btn ghost sm" href="/"><ExternalLink size={13} /> Open PuneStay Sonar (full Nearby Services page)</a>
       </div>
     </>
   )

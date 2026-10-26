@@ -30,7 +30,6 @@ def list_listings(
     gender: Literal["male", "female", "any"] | None = Query(None, description="'any' shows all listings"),
     food: bool | None = Query(None, description="true = only food-included"),
     vacancy: bool | None = Query(None, description="true = only listings with rooms available"),
-    include_demo: bool = Query(True, description="include synthetic demo listings"),
     destination_id: int | None = Query(None, description="adds commute_s and commute_m per listing"),
     mode: Literal["car", "bike", "foot"] = "car",
     max_commute_s: int | None = Query(None, ge=0, description="drop listings farther than this (needs destination_id)"),
@@ -62,8 +61,6 @@ def list_listings(
     if vacancy is not None:
         where.append("l.vacancy = %(vacancy)s")
         params["vacancy"] = vacancy
-    if not include_demo:
-        where.append("l.is_demo = FALSE")
 
     commute_join = ""
     commute_cols = ", NULL::int AS commute_s, NULL::int AS commute_m"

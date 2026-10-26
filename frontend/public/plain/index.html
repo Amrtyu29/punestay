@@ -44,7 +44,7 @@
 
   <!-- ================= header pill ================= -->
   <header class="hdr glass" id="hdr">
-    <a class="logo" href="../" title="Back to the PuneStay app">
+    <a class="logo" href="index.html" title="PuneStay Sonar">
       <span class="radar small" aria-hidden="true"><span></span><span></span><i></i></span>
       <span class="logo-text"><b>PuneStay <em>Sonar</em></b><small>Ping the city.</small></span>
     </a>
@@ -187,6 +187,12 @@
       </div>
       <ol id="list" class="list" aria-label="Results, nearest first"></ol>
     </div>
+  </aside>
+
+  <!-- ================= PG / hostel detail panel (stays inside Sonar) ================= -->
+  <aside id="detail" class="card glass detail" hidden aria-label="Place details" role="dialog">
+    <button class="icon-btn sm detail-close" type="button" aria-label="Close details" data-close="detail"><i data-lucide="x"></i></button>
+    <div id="detail-body" class="detail-body"></div>
   </aside>
 
   <!-- ================= layers panel ================= -->

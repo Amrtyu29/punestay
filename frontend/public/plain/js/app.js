@@ -555,11 +555,11 @@
         '<span class="res-main"><b>' + esc(p.name || 'Unnamed ' + nice(p.subcategory)) + '</b><small>' + esc(nice(p.subcategory)) + ' · ' + esc(p.label) + '</small></span>' +
         '<span class="res-dist">' + metres(p.distance_m) + '</span></div>' +
         '<div class="res-bar"><i data-w="' + Math.max(4, Math.round(100 * p.distance_m / maxD)) + '"></i></div>' +
-        (p.listing ? '<div class="res-rent">' + (p.rent_min != null ? '₹' + Number(p.rent_min).toLocaleString('en-IN') + ' <small>/ month</small>' : 'Rent not published') + (p.gender && p.gender !== 'any' ? ' <small>· ' + (p.gender === 'male' ? 'boys' : 'girls') + ' only</small>' : '') + (p.status === 'verified' ? ' <small>· verified</small>' : '') + '</div>' : '') +
+        (p.listing ? '<div class="res-rent">' + (p.rent_min != null ? '₹' + Number(p.rent_min).toLocaleString('en-IN') + ' <small>/ month</small>' : 'Rent not published') + (p.gender && p.gender !== 'any' ? ' <small>· ' + (p.gender === 'male' ? 'boys' : 'girls') + ' only</small>' : '') + (p.status === 'verified' ? ' <small>· verified</small>' : '') + ' <button type="button" class="link" data-detail="' + p.id + '">Details →</button></div>' : '') +
         (p.address ? '<div class="res-addr">' + ic('map-pin') + '<span>' + esc(p.address) + '</span></div>' : '') +
         '<button class="res-more" type="button" aria-label="More details" aria-expanded="false">' + ic('chevron-down') + '</button>' +
         '<div class="res-detail"><dl>' +
-          (p.listing ? '<dt>Listing</dt><dd><a href="' + esc(p.link) + '" target="_blank" rel="noopener">Open in PuneStay ↗</a></dd>' : '') +
+          (p.listing ? '<dt>Listing</dt><dd><button type="button" class="link" data-detail="' + p.id + '">Full details, photos and nearby services</button></dd>' : '') +
           (p.phone ? '<dt>Phone</dt><dd><a href="tel:' + esc(p.phone) + '">' + esc(p.phone) + '</a></dd>' : '') +
           (p.website ? '<dt>Website</dt><dd><a href="' + esc(p.website) + '" target="_blank" rel="noopener">' + esc(p.website.replace(/^https?:\/\//, '')) + '</a></dd>' : '') +
           (p.opening_hours ? '<dt>Hours</dt><dd>' + esc(p.opening_hours) + '</dd>' : '') +
@@ -571,6 +571,7 @@
       li.addEventListener('click', function (e) {
         if (e.target.closest('.res-more')) { li.classList.toggle('open'); e.target.closest('.res-more').setAttribute('aria-expanded', String(li.classList.contains('open'))); return; }
         if (e.target.closest('[data-copy]')) { copyText(e.target.closest('[data-copy]').dataset.copy); return; }
+        if (e.target.closest('[data-detail]')) { openDetail(Number(e.target.closest('[data-detail]').dataset.detail)); return; }
         if (e.target.closest('a')) return;
         setActive(p.id, 'card');
       });
@@ -596,7 +597,7 @@
     return '<div class="pop-head"><span class="tile" style="--c:' + colorOf(p.category) + '">' + ic(iconOf(p.category)) + '</span><span><b>' + esc(p.name || 'Unnamed ' + nice(p.subcategory)) + '</b><small>' + esc(nice(p.subcategory)) + ' · ' + esc(p.label) + '</small></span></div>' +
       '<div><span class="pop-dist">' + metres(p.distance_m) + '</span> from your pin' + (p.listing ? '<br>' + (p.rent_min != null ? '₹' + Number(p.rent_min).toLocaleString('en-IN') + ' / month' : 'Rent not published') : '') + (p.address ? '<br>' + esc(p.address) : '') + '</div>' +
       '<div class="pop-actions"><a class="primary" href="' + directionsUrl(f) + '" target="_blank" rel="noopener">' + ic('navigation') + ' Directions</a>' +
-      (p.listing ? '<a href="' + esc(p.link) + '" target="_blank" rel="noopener">' + ic('external-link') + ' PuneStay</a>' : '') +
+      (p.listing ? '<button type="button" data-detail="' + p.id + '">' + ic('info') + ' Details</button>' : '') +
       (p.phone ? '<a href="tel:' + esc(p.phone) + '">' + ic('phone') + ' Call</a>' : '') +
       (p.website ? '<a href="' + esc(p.website) + '" target="_blank" rel="noopener">' + ic('globe') + ' Website</a>' : '') + '</div>';
   }
@@ -664,6 +665,70 @@
     setTimeout(function () { d.remove(); }, 3000);
   }
 
+  // ======================= PG / hostel details inside Sonar =======================
+  var detailEl = $('detail'), detailBody = $('detail-body'), detailAbort = null;
+  var TYPE_LABEL = { pg: 'PG', hostel: 'Hostel', flat: 'Flat' };
+  var GENDER_LABEL = { any: 'Anyone', male: 'Boys only', female: 'Girls only' };
+  var NEAR_LABEL = { bus_stop: 'Bus stop', metro: 'Metro station', mess: 'Mess / food', hospital: 'Hospital', pharmacy: 'Pharmacy', atm: 'ATM / bank', grocery: 'Grocery', police: 'Police station' };
+  function safetyLevel(s) { return s == null ? { text: 'Not scored', cls: '' } : s >= 70 ? { text: s + ' · Good', cls: 'good' } : s >= 45 ? { text: s + ' · Moderate', cls: 'mid' } : { text: s + ' · Low', cls: 'bad' }; }
+  function openDetail(id) {
+    detailEl.hidden = false;
+    detailBody.innerHTML = '<div class="d-loading"><div></div><div></div><div></div></div>';
+    if (detailAbort) detailAbort.abort();
+    detailAbort = new AbortController();
+    fetch(API + '/listings/' + id, { signal: detailAbort.signal })
+      .then(function (r) { return r.json().then(function (b) { if (!r.ok) throw new Error(b.detail || 'Could not load this place (' + r.status + ')'); return b; }); })
+      .then(renderDetail)
+      .catch(function (e) { if (e.name !== 'AbortError') detailBody.innerHTML = '<div class="state">' + ic('triangle-alert') + '<b>Could not load</b><p class="muted small">' + esc(e.message) + '</p></div>'; icons(); });
+    if (markers[id]) setActive(id, 'detail');
+  }
+  function closeDetail() { detailEl.hidden = true; }
+  function renderDetail(d) {
+    var l = d.listing, photos = d.photos || [], phone = d.contact_phone;
+    var imported = (l.source === 'osm' || l.source === 'overture') && l.owner_id == null;
+    var initials = (l.name || '?').replace(/[^A-Za-z0-9 ]/g, '').split(' ').filter(Boolean).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase() || '?';
+    var safety = safetyLevel(l.safety_score);
+    var near = Object.keys(d.nearby || {}).filter(function (c) { return d.nearby[c] && d.nearby[c].length; });
+    var amen = Array.isArray(l.amenities) ? l.amenities : [];
+    var pos = { geometry: { coordinates: [l.lng, l.lat] } };
+    var h = '<div class="d-hero">' +
+      (photos.length ? '<div class="strip">' + photos.map(function (p) { return '<img src="' + esc(p.url) + '" alt="" loading="lazy" />'; }).join('') + '</div>'
+                     : '<span class="initials">' + esc(initials) + '</span><span class="none">' + ic('image-off') + ' No photos yet</span>') + '</div>' +
+      '<div class="d-main">' +
+        '<div class="badges">' + (l.status === 'verified' ? '<span class="badge good">' + ic('shield-check') + ' Verified</span>' : '<span class="badge warn">Unverified</span>') +
+          (l.vacancy != null ? '<span class="badge ' + (l.vacancy ? 'good' : '') + '">' + (l.vacancy ? 'Rooms available' : 'Currently full') + '</span>' : '') +
+          (imported ? '<span class="badge">From ' + (l.source === 'osm' ? 'OpenStreetMap' : 'Overture Maps') + '</span>' : '') + '</div>' +
+        '<div><div class="d-title">' + esc(l.name) + '</div><div class="d-addr">' + ic('map-pin') + '<span>' + esc(l.address) + '</span></div></div>' +
+        (l.rent_min != null
+          ? '<div class="d-rent"><b>₹' + Number(l.rent_min).toLocaleString('en-IN') + '</b>' + (l.rent_max && l.rent_max !== l.rent_min ? '<small>to ₹' + Number(l.rent_max).toLocaleString('en-IN') + '</small>' : '') + '<small>/ month</small>' + (l.deposit != null ? '<span class="note">Deposit ₹' + Number(l.deposit).toLocaleString('en-IN') + '</span>' : '') + '</div>'
+          : '<div class="d-rent"><b style="font-size:18px">Rent not published</b><span class="note">' + (phone ? 'Call to ask the current rent.' : 'Ask the owner for the current rent.') + ' Owners can claim this place in the PuneStay app and publish it.</span></div>') +
+        '<div class="facts">' +
+          '<div class="fact">' + ic('house') + '<span><small>Type</small><b>' + esc(TYPE_LABEL[l.listing_type] || l.listing_type) + '</b></span></div>' +
+          '<div class="fact">' + ic('users') + '<span><small>For</small><b>' + esc(imported && l.gender === 'any' ? 'Not stated' : (GENDER_LABEL[l.gender] || l.gender)) + '</b></span></div>' +
+          '<div class="fact">' + ic('utensils') + '<span><small>Food</small><b>' + (l.food_included ? 'Included' : imported ? 'Not stated' : 'Not included') + '</b></span></div>' +
+          '<div class="fact ' + safety.cls + '">' + ic('shield-check') + '<span><small>Night safety</small><b>' + esc(safety.text) + '</b></span></div>' +
+        '</div>' +
+        (amen.length ? '<div class="d-section"><h4>Amenities</h4><div class="amen">' + amen.map(function (a) { return '<span>' + esc(nice(a)) + '</span>'; }).join('') + '</div></div>' : '') +
+        '<div class="d-section"><h4>Nearby</h4>' + (near.length ? '<div class="nearrows">' + near.map(function (c) {
+          var f = d.nearby[c][0];
+          return '<div class="nearrow"><span class="tile" style="--c:' + colorOf(c) + '">' + ic(iconOf(c)) + '</span><span class="main"><small>' + esc(NEAR_LABEL[c] || nice(c)) + '</small><b>' + esc(f.name || 'Unnamed') + '</b></span><span class="dist">' + metres(f.distance_m) + '</span></div>';
+        }).join('') + '</div>' : '<p class="muted small">Nothing within 3 km in the database yet.</p>') + '</div>' +
+        '<div class="d-actions">' +
+          (phone ? '<a class="btn primary" href="tel:' + esc(phone) + '">' + ic('phone') + ' Call</a>' : '') +
+          (/^https?:\/\//i.test(l.website || '') ? '<a class="btn" href="' + esc(l.website) + '" target="_blank" rel="noopener">' + ic('globe') + ' Website</a>' : '') +
+          '<a class="btn" href="' + directionsUrl(pos) + '" target="_blank" rel="noopener">' + ic('navigation') + ' Directions</a>' +
+        '</div>' +
+        '<p class="d-foot">To confirm, flag, claim or edit this place, open it in the <a href="../#/listing/' + l.id + '" target="_blank" rel="noopener">PuneStay app</a>.</p>' +
+      '</div>';
+    detailBody.innerHTML = h;
+    icons();
+  }
+  qsa('[data-close="detail"]').forEach(function (b) { b.addEventListener('click', closeDetail); });
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('.leaflet-popup [data-detail], #detail [data-detail]');
+    if (b) openDetail(Number(b.dataset.detail));
+  });
+
   // ======================= layers panel, legend, collapse =======================
   var layersEl = $('layers');
   function toggleLayers(open) {
@@ -724,7 +789,7 @@
 
   document.addEventListener('keydown', function (e) {
     var typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
-    if (e.key === 'Escape') { openHelp(false); toggleLayers(false); openCoords(false); dlMenu.hidden = true; hideSuggest(); if (!$('tour').hidden) endTour(); map.closePopup(); return; }
+    if (e.key === 'Escape') { openHelp(false); toggleLayers(false); openCoords(false); dlMenu.hidden = true; hideSuggest(); closeDetail(); if (!$('tour').hidden) endTour(); map.closePopup(); return; }
     if (typing) return;
     if (e.key === '/') { e.preventDefault(); q.focus(); }
     else if (e.key === 'Enter') { if (state.loc) scan(true); }
@@ -853,7 +918,7 @@
         var total = list.reduce(function (s, c) { return s + c.count; }, 0);
         var groups = {}; list.forEach(function (c) { groups[groupOf(c.category)] = true; });
         countUp($('stat-services'), total); countUp($('stat-types'), list.length); countUp($('stat-groups'), Object.keys(groups).length);
-        if (state.cat && !list.some(function (c) { return c.category === state.cat; })) { state.cat = ''; }
+        if (state.cat && !isStay() && !list.some(function (c) { return c.category === state.cat; })) { state.cat = ''; }
         renderGroupChips(); renderTypeChips(); renderLegend();
         $('api-banner').hidden = true;
         return fetch(API + '/listings/nearby/summary').then(function (r) { return r.ok ? r.json() : null; }).then(function (s) {

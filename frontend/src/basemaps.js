@@ -56,7 +56,8 @@ export function leafletBasemaps(L) {
     Streets: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, subdomains: 'abc', attribution: OSM_ATTR }),
     Satellite: L.layerGroup([L.tileLayer(ESRI_IMG, { maxZoom: 19, attribution: ESRI_ATTR }), L.tileLayer(ESRI_LABELS, { maxZoom: 19 })]),
     Terrain: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17, subdomains: 'abc', attribution: OTM_ATTR }),
-    Light: L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', { maxZoom: 19, subdomains: 'abcd', attribution: CARTO_ATTR }),
-    Dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', { maxZoom: 19, subdomains: 'abcd', attribution: CARTO_ATTR }),
+    // Esri's gray canvases need no API key (CARTO's free tiles started answering "API key required" in Oct 2026).
+    Light: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, attribution: 'Tiles &copy; Esri, HERE, Garmin, ' + OSM_ATTR }),
+    Dark: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, attribution: 'Tiles &copy; Esri, HERE, Garmin, ' + OSM_ATTR }),
   }
 }

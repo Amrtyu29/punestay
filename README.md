@@ -391,12 +391,14 @@ python backend\tests\smoke_api.py
 The brief's required system is **PuneStay Sonar**, the home page at http://localhost:5173, written in plain HTML,
 CSS and JavaScript with no framework and no build step: `frontend/index.html`, `frontend/public/css/style.css` and
 `frontend/public/js/app.js`. It uses Leaflet, Leaflet.markercluster, Leaflet.heat and Lucide icons from CDNs and
-the `/nearby`, `/nearby/categories`, `/geocode` and `/listings/nearby` API. It has an intro screen, a first-visit
-tour, a help modal with shortcuts, address and PIN-code search, glass panels with a dark and a light theme, five
-basemaps, a heatmap and per-category GeoServer WMS overlays (CQL filters on the `services` view), a **PGs & hostels**
-category that searches PuneStay's own listings (`GET /listings/nearby`, same parameters as `/nearby` plus `type` and
-`gender`; `GET /listings/nearby/summary` gives the counts) with an in-page detail panel, CSV and GeoJSON downloads,
-shareable links such as `/?lat=18.52&lng=73.85&category=hospital&radius=1000`, and a bottom sheet on phones.
+the `/listings/nearby`, `/listings/nearby/summary`, `/listings/{id}` and `/geocode` API. The service it finds is
+accommodation: the category is **PG or hostel** and the subcategory is **anyone, boys or girls**. It has an intro
+screen, a first-visit tour, a help modal with shortcuts, address and PIN-code search, glass panels with a dark and
+a light theme, five basemaps, a heatmap, GeoServer WMS overlays (all listings, and bus stops and metro stations via a
+CQL filter on the `services` view), an in-page detail panel per place with the nearest bus stop, metro, mess,
+hospital, pharmacy, ATM, grocery and police station, CSV and GeoJSON downloads, shareable links such as
+`/?lat=18.52&lng=73.85&type=hostel&gender=female&radius=2000`, and a bottom sheet on phones. The generic
+22-category services search remains available in the app's **Nearby** sidebar tab and through `GET /nearby`.
 
 The React map app at http://localhost:5173/app/ (`frontend/app/index.html`, `frontend/src/`) is the extension:
 listings with clustering and cards, commute filters and directions, the rent heatmap, compare areas, saved places,
@@ -414,8 +416,8 @@ PG by car, bike or foot, using the same OSRM route endpoint, with a link to open
 | Brief requirement | Where |
 |---|---|
 | Location by map click, lat/lng, browser geolocation | `frontend/public/js/app.js` (map click and drag, coordinates popover with per-field validation, "Use my location" with denied / unavailable / timeout / insecure-context messages, address and PIN search) |
-| Category and subcategory filtering | `GET /nearby/categories` lists 20 categories with OSM subcategories (hospital vs clinic, atm vs bank, fuel vs charging station, ...) |
-| Radius and/or nearest-N | `GET /nearby?radius_m=&limit=` ; Sonar offers "Within a radius" (slider with a live ring) and "Nearest N" (dashed ring to the farthest result) |
+| Category and subcategory filtering | Sonar: category PG / hostel (`type`) and subcategory anyone / boys / girls (`gender`) on `GET /listings/nearby`; the app's Nearby tab: `GET /nearby/categories` lists 20 service categories with OSM subcategories |
+| Radius and/or nearest-N | `GET /listings/nearby?radius_m=&limit=` (same contract as `GET /nearby`); Sonar offers "Within a radius" (slider with a live ring) and "Nearest N" (dashed ring to the farthest result) |
 | Distance-sorted list synced with markers | list rows and Leaflet markers highlight each other; popups show details |
 | PostGIS query with proper CRS | points stored in EPSG:4326, distances with the `geography` type (metres on the WGS84 ellipsoid), KNN ordering on the GIST index |
 | GeoServer layers | workspace `punestay`: `services`, `pois`, `listings_public`, `destinations`, `safety_reports`, `wards` (WMS + WFS); switchable WMS overlays on the page |

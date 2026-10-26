@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>PuneStay Sonar · Nearby Services WebGIS</title>
-  <meta name="description" content="Ping the city: find the services nearest to any point in Pune, from PostGIS, drawn with Leaflet." />
+  <meta name="description" content="Ping the city: find the PGs and hostels nearest to any point in Pune, from PostGIS, drawn with Leaflet." />
   <meta name="theme-color" content="#070b16" />
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
 
@@ -26,11 +26,11 @@
       <div class="radar big" aria-hidden="true"><span></span><span></span><span></span><i></i></div>
       <p class="intro-kicker">Pune · Nearby Services WebGIS</p>
       <h1 class="intro-title">Ping the city.</h1>
-      <p class="intro-sub">Drop a pin anywhere in Pune and get the nearest hospitals, bus stops, mess, ATMs and more, sorted by distance from PostGIS.</p>
+      <p class="intro-sub">Drop a pin anywhere in Pune and get the nearest PGs and hostels, sorted by distance from PostGIS, with the phone number, the rent where published, and what is around each one.</p>
       <div class="intro-stats" aria-live="polite">
-        <div><b data-count="0" id="stat-services">0</b><small>services</small></div>
-        <div><b data-count="0" id="stat-types">0</b><small>service types</small></div>
-        <div><b data-count="0" id="stat-groups">0</b><small>categories</small></div>
+        <div><b data-count="0" id="stat-services">0</b><small>places</small></div>
+        <div><b data-count="0" id="stat-types">0</b><small>PGs</small></div>
+        <div><b data-count="0" id="stat-groups">0</b><small>hostels</small></div>
       </div>
       <div class="intro-actions">
         <button id="intro-start" class="btn primary lg" type="button">Start exploring <span class="kbd">Enter</span></button>
@@ -103,16 +103,13 @@
       </section>
 
       <section class="step">
-        <h3><span class="num">2</span> Service category <span class="tip" data-tip="Groups of service types, as stored in the database. Pick one, or search all.">ⓘ</span></h3>
-        <div id="group-chips" class="chips"></div>
+        <h3><span class="num">2</span> Kind of place <span class="tip" data-tip="PG rooms or hostel beds, as stored in the PuneStay listings. Pick one, or search both.">ⓘ</span></h3>
+        <div id="type-chips" class="chips"></div>
       </section>
 
-      <section class="step" id="type-step" hidden>
-        <h3><span class="num">3</span> Service type <span class="tip" data-tip="The service types inside the chosen category.">ⓘ</span></h3>
-        <div id="type-chips" class="chips"></div>
-        <label id="sub-wrap" class="select-wrap" hidden>Narrow further
-          <select id="subcategory"><option value="">Any</option></select>
-        </label>
+      <section class="step" id="type-step">
+        <h3><span class="num">3</span> Who is it for <span class="tip" data-tip="Places for anyone are always included; boys or girls narrows to places that take them.">ⓘ</span></h3>
+        <div id="for-chips" class="chips"></div>
       </section>
 
       <section class="step">
@@ -172,11 +169,11 @@
       <div id="empty" class="state" hidden>
         <div class="radar small" aria-hidden="true"><span></span><span></span><i></i></div>
         <b>Nothing in range</b>
-        <p class="muted small" id="empty-msg">No services matched here.</p>
+        <p class="muted small" id="empty-msg">No PGs or hostels matched here.</p>
         <div class="state-actions">
           <button class="btn sm" type="button" data-fix="radius1k">Try 1 km</button>
           <button class="btn sm" type="button" data-fix="nearest10">Nearest 10 instead</button>
-          <button class="btn sm" type="button" data-fix="allcats">All categories</button>
+          <button class="btn sm" type="button" data-fix="allcats">Any place, anyone</button>
         </div>
       </div>
       <div id="error" class="state" hidden>
@@ -239,19 +236,20 @@
       <div class="htab" data-hpane="start">
         <ol>
           <li><b>Set a location.</b> Tap the map, press the locate button, search an address or PIN code, or type coordinates.</li>
-          <li><b>Choose a category</b> and, if you like, a service type.</li>
+          <li><b>Choose PG or hostel</b> and who it is for.</li>
           <li><b>Pick a search type</b>: within a radius, or the nearest N.</li>
           <li><b>Press Scan.</b> The ring sweeps and the nearest places appear on the map and in the list.</li>
         </ol>
         <button id="btn-replay-tour" class="btn sm" type="button">Replay the tour</button>
       </div>
       <div class="htab" data-hpane="modes" hidden>
-        <p><b>Within a radius</b> asks PostGIS for every matching service whose distance on the WGS84 ellipsoid is at most the radius (ST_DWithin on a geography column), ordered by distance, capped by the maximum results.</p>
+        <p><b>Within a radius</b> asks PostGIS for every matching PG or hostel whose distance on the WGS84 ellipsoid is at most the radius (ST_DWithin on a geography column), ordered by distance, capped by the maximum results.</p>
         <p><b>Nearest N</b> ignores the radius and returns the N closest matches using the index-assisted distance operator, so even a quiet area returns something.</p>
         <p>Distances are in metres along the earth's surface, not in degrees.</p>
       </div>
       <div class="htab" data-hpane="map" hidden>
-        <p>Choose a <b>basemap</b> from the Layers panel. Overlays include the result markers, the search ring, a heatmap of results, and the services published by <b>GeoServer</b> as WMS, all of them or one category at a time.</p>
+        <p>Choose a <b>basemap</b> from the Layers panel. Overlays include the result markers, the search ring, a heatmap of results, every PG and hostel published by <b>GeoServer</b> as WMS, and the bus stops and metro stations around.</p>
+        <p>Open a place to see its nearest bus stop, metro, mess, hospital, pharmacy, ATM, grocery and police station, with distances.</p>
         <p>The <b>legend</b> at the bottom left explains the colours; the readout at the bottom right shows the coordinates under the cursor.</p>
       </div>
       <h3>Shortcuts</h3>

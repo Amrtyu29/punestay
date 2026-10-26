@@ -1,10 +1,12 @@
 /*
  * PuneStay Sonar · Nearby Services WebGIS in plain JavaScript (Leaflet, no framework, no build step).
  *
- * Course brief: location by map click / coordinates / geolocation (+ address and PIN search), category and
- * subcategory filters, radius and nearest-N search, a distance-sorted list synchronised with the markers,
- * popup + side-panel details, a PostGIS query on the server (GET /nearby, geography, metres), GeoServer WMS
- * overlays, and explicit error handling for denied geolocation, invalid input and empty results.
+ * Course brief (Nearby Services WebGIS) applied to one service: PGs and hostels. Location by map click /
+ * coordinates / geolocation (+ address and PIN search), category (PG or hostel) and subcategory (anyone, boys,
+ * girls) filters, radius and nearest-N search, a distance-sorted list synchronised with the markers, popup +
+ * side-panel details with the nearest bus stop, mess, hospital and more, a PostGIS query on the server
+ * (GET /listings/nearby, geography, metres), GeoServer WMS overlays, and explicit error handling for denied
+ * geolocation, invalid input and empty results.
  */
 (function () {
   'use strict';
@@ -20,36 +22,20 @@
   var STORE = { theme: 'punestay.sonar.theme', toured: 'punestay.sonar.toured', base: 'punestay.sonar.basemap' };
   var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // One mapping drives chips, markers, popups, cards and the legend. Groups collect the database categories.
-  var GROUPS = {
-    healthcare: { label: 'Healthcare', icon: 'stethoscope', color: 'var(--c-healthcare)', cats: ['hospital', 'pharmacy'] },
-    food:       { label: 'Food', icon: 'soup', color: 'var(--c-food)', cats: ['mess', 'grocery'] },
-    transport:  { label: 'Transport', icon: 'bus', color: 'var(--c-transport)', cats: ['bus_stop', 'metro', 'fuel'] },
-    education:  { label: 'Education', icon: 'graduation-cap', color: 'var(--c-education)', cats: ['school', 'college', 'library'] },
-    public:     { label: 'Public services', icon: 'shield', color: 'var(--c-public)', cats: ['police', 'fire_station', 'post_office', 'toilets'] },
-    commercial: { label: 'Commercial', icon: 'shopping-bag', color: 'var(--c-commercial)', cats: ['atm', 'bank', 'office', 'lodging'] },
-    recreation: { label: 'Recreation', icon: 'trees', color: 'var(--c-recreation)', cats: ['park', 'place_of_worship'] },
-    // PuneStay's own listings (the PG finder), searched through /listings/nearby instead of /nearby
-    stay:       { label: 'PGs & hostels', icon: 'bed-double', color: 'var(--c-stay)', cats: ['pg', 'hostel'], listings: true },
-    other:      { label: 'Other', icon: 'map-pin', color: 'var(--c-other)', cats: [] }
-  };
-  var CAT_ICON = {
-    hospital: 'hospital', pharmacy: 'pill', mess: 'utensils', grocery: 'shopping-cart', bus_stop: 'bus', metro: 'train-front',
-    fuel: 'fuel', school: 'school', college: 'graduation-cap', library: 'book-open', police: 'shield', fire_station: 'flame',
-    post_office: 'mail', toilets: 'bath', atm: 'banknote', bank: 'landmark', office: 'building-2', lodging: 'bed-double',
-    park: 'trees', place_of_worship: 'church', pg: 'bed-double', hostel: 'building'
-  };
-  var STAY_CATS = [   // shown as service types under "PGs & hostels"; counts filled from /listings/nearby/summary
-    { category: 'pg', label: 'PG', count: 0, subcategories: [] },
-    { category: 'hostel', label: 'Hostel', count: 0, subcategories: [] }
+  // One mapping drives chips, markers, popups, cards and the legend. The "category" is the kind of place
+  // (PG or hostel) and the "subcategory" is who it is for; both come from PuneStay's own listings table.
+  var TYPES = [
+    { category: 'pg', label: 'PG', icon: 'bed-double', color: 'var(--c-stay)', count: 0 },
+    { category: 'hostel', label: 'Hostel', icon: 'building', color: 'var(--c-hostel)', count: 0 }
   ];
-  var STAY_SUBS = [{ subcategory: 'any', label: 'Anyone' }, { subcategory: 'male', label: 'Boys' }, { subcategory: 'female', label: 'Girls' }];
-  function isStay() { return state.group === 'stay'; }
-  var CAT_GROUP = {};
-  Object.keys(GROUPS).forEach(function (g) { GROUPS[g].cats.forEach(function (c) { CAT_GROUP[c] = g; }); });
-  function groupOf(cat) { return CAT_GROUP[cat] || 'other'; }
-  function colorOf(cat) { return GROUPS[groupOf(cat)].color; }
-  function iconOf(cat) { return CAT_ICON[cat] || GROUPS[groupOf(cat)].icon; }
+  var FOR = [{ sub: '', label: 'Anyone', icon: 'users' }, { sub: 'male', label: 'Boys', icon: 'user' }, { sub: 'female', label: 'Girls', icon: 'user-round' }];
+  // Icons and colours for the nearest services shown inside a place's detail panel.
+  var CAT_ICON = { pg: 'bed-double', hostel: 'building', bus_stop: 'bus', metro: 'train-front', mess: 'utensils', hospital: 'hospital', pharmacy: 'pill', atm: 'banknote', grocery: 'shopping-cart', police: 'shield' };
+  var NEAR_COLOR = { bus_stop: 'var(--c-transport)', metro: 'var(--c-transport)', mess: 'var(--c-food)', hospital: 'var(--c-healthcare)', pharmacy: 'var(--c-healthcare)', atm: 'var(--c-commercial)', grocery: 'var(--c-food)', police: 'var(--c-public)' };
+  function isStay() { return true; }
+  function typeOf(cat) { return TYPES.filter(function (t) { return t.category === cat; })[0]; }
+  function colorOf(cat) { var t = typeOf(cat); return t ? t.color : (NEAR_COLOR[cat] || 'var(--c-other)'); }
+  function iconOf(cat) { return CAT_ICON[cat] || 'map-pin'; }
 
   // ======================= small helpers =======================
   function $(id) { return document.getElementById(id); }
@@ -107,9 +93,8 @@
   function syncUrl() {
     var p = new URLSearchParams();
     if (state.loc) { p.set('lat', state.loc.lat); p.set('lng', state.loc.lng); if (state.loc.name) p.set('name', state.loc.name); }
-    if (state.group) p.set('group', state.group);
-    if (state.cat) p.set('category', state.cat);
-    if (state.sub) p.set('subcategory', state.sub);
+    if (state.cat) p.set('type', state.cat);
+    if (state.sub) p.set('gender', state.sub);
     p.set('mode', state.mode);
     p.set('radius', radiusM());
     p.set('n', state.n);
@@ -122,9 +107,10 @@
     if (p.get('radius') && RADII.indexOf(Number(p.get('radius'))) >= 0) setRadius(RADII.indexOf(Number(p.get('radius'))), true);
     if (p.get('n') && [5, 10, 20, 50, 100].indexOf(Number(p.get('n'))) >= 0) setN(Number(p.get('n')), true);
     if (p.get('base')) setBasemap(p.get('base'), true);
-    if (p.get('group') && GROUPS[p.get('group')]) state.group = p.get('group');
-    if (p.get('category')) { state.cat = p.get('category'); if (!state.group) state.group = groupOf(state.cat); }
-    if (p.get('subcategory')) state.sub = p.get('subcategory');
+    var t = p.get('type') || p.get('category');
+    if (t && typeOf(t)) state.cat = t;
+    var g = p.get('gender') || p.get('subcategory');
+    if (g === 'male' || g === 'female') state.sub = g;
     var lat = Number(p.get('lat')), lng = Number(p.get('lng'));
     if (p.get('lat') && p.get('lng') && !isNaN(lat) && !isNaN(lng) && inPune(lat, lng)) {
       return { lat: round6(lat), lng: round6(lng), name: p.get('name') || 'Shared location', source: 'link' };
@@ -180,13 +166,9 @@
     { key: 'markers', label: 'Result markers', icon: 'map-pin', on: true },
     { key: 'ring', label: 'Search ring', icon: 'circle-dashed', on: true },
     { key: 'heat', label: 'Heatmap of results', icon: 'flame', on: false },
-    { key: 'wmsAll', label: 'All services (GeoServer WMS)', icon: 'server', on: false }
+    { key: 'wmsAll', label: 'All PGs and hostels (GeoServer WMS)', icon: 'server', on: false, layer: 'listings_public' },
+    { key: 'wmsStops', label: 'Bus stops and metro around (GeoServer WMS)', icon: 'bus', color: 'var(--c-transport)', on: false, cql: "category IN ('bus_stop','metro')" }
   ];
-  Object.keys(GROUPS).forEach(function (g) {
-    if (g === 'other') return;
-    if (GROUPS[g].listings) { OVERLAYS.push({ key: 'wms_' + g, label: GROUPS[g].label + ' (WMS)', icon: GROUPS[g].icon, color: GROUPS[g].color, on: false, layer: 'listings_public' }); return; }
-    OVERLAYS.push({ key: 'wms_' + g, label: GROUPS[g].label + ' (WMS)', icon: GROUPS[g].icon, color: GROUPS[g].color, on: false, cql: "category IN ('" + GROUPS[g].cats.join("','") + "')" });
-  });
   function setOverlay(key, on) {
     state.overlays[key] = on;
     if (key === 'markers') { if (on) clusters.addTo(map); else map.removeLayer(clusters); }
@@ -359,53 +341,32 @@
   function shortName(display) { return display.split(',').slice(0, 3).join(',').trim(); }
 
   // ======================= filters =======================
-  function renderGroupChips() {
-    var present = {};
-    categories.forEach(function (c) { present[groupOf(c.category)] = (present[groupOf(c.category)] || 0) + c.count; });
-    present.stay = STAY_CATS.reduce(function (s, c) { return s + c.count; }, 0) || present.stay;
-    var h = '<button type="button" class="chip' + (state.group ? '' : ' on') + '" data-group="" style="--c: var(--primary)">' + ic('layers') + ' All</button>';
-    Object.keys(GROUPS).forEach(function (g) {
-      if (!present[g]) return;
-      h += '<button type="button" class="chip' + (state.group === g ? ' on' : '') + '" data-group="' + g + '" style="--c:' + GROUPS[g].color + '">' + ic(GROUPS[g].icon) + ' ' + esc(GROUPS[g].label) + ' <small>' + present[g] + '</small></button>';
-    });
-    $('group-chips').innerHTML = h;
-    icons();
-  }
   function renderTypeChips() {
-    var step = $('type-step');
-    if (!state.group) { step.hidden = true; return; }
-    var cats = isStay() ? STAY_CATS : categories.filter(function (c) { return groupOf(c.category) === state.group; });
-    var h = '<button type="button" class="chip' + (state.cat ? '' : ' on') + '" data-cat="" style="--c:' + GROUPS[state.group].color + '">' + ic('asterisk') + ' Any ' + esc(GROUPS[state.group].label.toLowerCase()) + '</button>';
-    cats.forEach(function (c) {
-      h += '<button type="button" class="chip' + (state.cat === c.category ? ' on' : '') + '" data-cat="' + c.category + '" style="--c:' + colorOf(c.category) + '">' + ic(iconOf(c.category)) + ' ' + esc(c.label) + ' <small>' + c.count + '</small></button>';
+    var total = TYPES.reduce(function (s, t) { return s + t.count; }, 0);
+    var h = '<button type="button" class="chip' + (state.cat ? '' : ' on') + '" data-cat="" style="--c: var(--primary)">' + ic('layers') + ' Any' + (total ? ' <small>' + total + '</small>' : '') + '</button>';
+    TYPES.forEach(function (t) {
+      h += '<button type="button" class="chip' + (state.cat === t.category ? ' on' : '') + '" data-cat="' + t.category + '" style="--c:' + t.color + '">' + ic(t.icon) + ' ' + esc(t.label) + (t.count ? ' <small>' + t.count + '</small>' : '') + '</button>';
     });
     $('type-chips').innerHTML = h;
-    step.hidden = false;
-    renderSubSelect();
     icons();
   }
-  function renderSubSelect() {
-    var sel = $('subcategory'), wrap = $('sub-wrap');
-    var cat = categories.filter(function (c) { return c.category === state.cat; })[0];
-    sel.innerHTML = '<option value="">Any</option>';
-    var subs = isStay() ? STAY_SUBS.slice(1) : (cat ? cat.subcategories : []);
-    wrap.firstChild.textContent = isStay() ? 'For ' : 'Narrow further ';
-    subs.forEach(function (s) { var o = document.createElement('option'); o.value = s.subcategory; o.textContent = s.label || (nice(s.subcategory) + ' (' + s.count + ')'); sel.appendChild(o); });
-    sel.value = state.sub && subs.some(function (s) { return s.subcategory === state.sub; }) ? state.sub : '';
-    state.sub = sel.value;
-    wrap.hidden = subs.length <= 1;
+  function renderForChips() {
+    $('for-chips').innerHTML = FOR.map(function (f) {
+      return '<button type="button" class="chip' + (state.sub === f.sub ? ' on' : '') + '" data-sub="' + f.sub + '" style="--c: var(--accent)">' + ic(f.icon) + ' ' + esc(f.label) + '</button>';
+    }).join('');
+    icons();
   }
-  $('group-chips').addEventListener('click', function (e) {
-    var b = e.target.closest('.chip'); if (!b) return;
-    state.group = b.dataset.group; state.cat = ''; state.sub = '';
-    renderGroupChips(); renderTypeChips(); afterFilterChange();
-  });
+  function renderGroupChips() { renderTypeChips(); renderForChips(); }
   $('type-chips').addEventListener('click', function (e) {
     var b = e.target.closest('.chip'); if (!b) return;
-    state.cat = b.dataset.cat; state.sub = '';
+    state.cat = b.dataset.cat;
     renderTypeChips(); afterFilterChange();
   });
-  $('subcategory').addEventListener('change', function (e) { state.sub = e.target.value; afterFilterChange(); });
+  $('for-chips').addEventListener('click', function (e) {
+    var b = e.target.closest('.chip'); if (!b) return;
+    state.sub = b.dataset.sub;
+    renderForChips(); afterFilterChange();
+  });
 
   function setMode(m, quiet) {
     state.mode = m;
@@ -434,8 +395,8 @@
   $('n-pills').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) setN(Number(b.dataset.n)); });
   function afterFilterChange() { syncUrl(); if (state.results.length || hasScanned) scan(); }
   $('btn-reset').addEventListener('click', function () {
-    state.group = ''; state.cat = ''; state.sub = ''; setMode('radius', true); setRadius(2, true); setN(10, true);
-    renderGroupChips(); renderTypeChips(); syncUrl(); toast('Filters reset', 'ok'); if (hasScanned) scan();
+    state.cat = ''; state.sub = ''; setMode('radius', true); setRadius(2, true); setN(10, true);
+    renderGroupChips(); syncUrl(); toast('Filters reset', 'ok'); if (hasScanned) scan();
   });
 
   // ======================= the scan (PostGIS on the server) =======================
@@ -443,14 +404,8 @@
   $('btn-scan').addEventListener('click', function () { scan(true); });
   function queryParams() {
     var p = new URLSearchParams({ lat: state.loc.lat, lng: state.loc.lng });
-    if (isStay()) {
-      if (state.cat) p.set('type', state.cat);
-      if (state.sub) p.set('gender', state.sub);
-    } else {
-      if (state.cat) p.set('category', state.cat);
-      else if (state.group) p.set('category', GROUPS[state.group].cats.filter(function (c) { return categories.some(function (k) { return k.category === c; }); }).join(','));
-      if (state.sub) p.set('subcategory', state.sub);
-    }
+    if (state.cat) p.set('type', state.cat);
+    if (state.sub) p.set('gender', state.sub);
     if (state.mode === 'radius') { p.set('radius_m', radiusM()); p.set('limit', state.n); }
     else { p.set('limit', state.n); }
     return p;
@@ -504,7 +459,7 @@
       var fix = b.dataset.fix;
       if (fix === 'radius1k') { setMode('radius', true); setRadius(1, true); }
       if (fix === 'nearest10') { setMode('nearest', true); setN(10, true); }
-      if (fix === 'allcats') { state.group = ''; state.cat = ''; state.sub = ''; renderGroupChips(); renderTypeChips(); }
+      if (fix === 'allcats') { state.cat = ''; state.sub = ''; renderGroupChips(); }
       syncUrl(); scan(true);
     });
   });
@@ -552,10 +507,10 @@
       li.style.setProperty('--c', c);
       li.innerHTML =
         '<div class="res-top"><span class="tile">' + ic(iconOf(p.category)) + '<b class="rank">' + rank + '</b></span>' +
-        '<span class="res-main"><b>' + esc(p.name || 'Unnamed ' + nice(p.subcategory)) + '</b><small>' + esc(nice(p.subcategory)) + ' · ' + esc(p.label) + '</small></span>' +
+        '<span class="res-main"><b>' + esc(p.name || 'Unnamed ' + nice(p.subcategory)) + '</b><small>' + esc(kindLine(p)) + '</small></span>' +
         '<span class="res-dist">' + metres(p.distance_m) + '</span></div>' +
         '<div class="res-bar"><i data-w="' + Math.max(4, Math.round(100 * p.distance_m / maxD)) + '"></i></div>' +
-        (p.listing ? '<div class="res-rent">' + (p.rent_min != null ? '₹' + Number(p.rent_min).toLocaleString('en-IN') + ' <small>/ month</small>' : 'Rent not published') + (p.gender && p.gender !== 'any' ? ' <small>· ' + (p.gender === 'male' ? 'boys' : 'girls') + ' only</small>' : '') + (p.status === 'verified' ? ' <small>· verified</small>' : '') + ' <button type="button" class="link" data-detail="' + p.id + '">Details →</button></div>' : '') +
+        (p.listing ? '<div class="res-rent">' + (p.rent_min != null ? '₹' + Number(p.rent_min).toLocaleString('en-IN') + ' <small>/ month</small>' : 'Rent not published') + ' <button type="button" class="link" data-detail="' + p.id + '">Details →</button></div>' : '') +
         (p.address ? '<div class="res-addr">' + ic('map-pin') + '<span>' + esc(p.address) + '</span></div>' : '') +
         '<button class="res-more" type="button" aria-label="More details" aria-expanded="false">' + ic('chevron-down') + '</button>' +
         '<div class="res-detail"><dl>' +
@@ -583,6 +538,10 @@
     drawRing(); drawHeat();
     if (bounds && n) map.flyToBounds(bounds.pad(0.18), { maxZoom: 16, duration: reducedMotion ? 0 : 0.9 });
   }
+  function kindLine(p) {
+    var t = typeOf(p.category);
+    return (t ? t.label : nice(p.subcategory)) + ' · ' + (p.gender === 'male' ? 'boys only' : p.gender === 'female' ? 'girls only' : 'anyone') + (p.status === 'verified' ? ' · verified' : '');
+  }
   function lat_(f) { return f.geometry.coordinates[1]; }
   function lng_(f) { return f.geometry.coordinates[0]; }
   function directionsUrl(f) { return 'https://www.google.com/maps/dir/?api=1' + (state.loc ? '&origin=' + state.loc.lat + ',' + state.loc.lng : '') + '&destination=' + lat_(f) + ',' + lng_(f); }
@@ -594,7 +553,7 @@
     });
   }
   function popupHtml(p, f) {
-    return '<div class="pop-head"><span class="tile" style="--c:' + colorOf(p.category) + '">' + ic(iconOf(p.category)) + '</span><span><b>' + esc(p.name || 'Unnamed ' + nice(p.subcategory)) + '</b><small>' + esc(nice(p.subcategory)) + ' · ' + esc(p.label) + '</small></span></div>' +
+    return '<div class="pop-head"><span class="tile" style="--c:' + colorOf(p.category) + '">' + ic(iconOf(p.category)) + '</span><span><b>' + esc(p.name || 'Unnamed ' + nice(p.subcategory)) + '</b><small>' + esc(kindLine(p)) + '</small></span></div>' +
       '<div><span class="pop-dist">' + metres(p.distance_m) + '</span> from your pin' + (p.listing ? '<br>' + (p.rent_min != null ? '₹' + Number(p.rent_min).toLocaleString('en-IN') + ' / month' : 'Rent not published') : '') + (p.address ? '<br>' + esc(p.address) : '') + '</div>' +
       '<div class="pop-actions"><a class="primary" href="' + directionsUrl(f) + '" target="_blank" rel="noopener">' + ic('navigation') + ' Directions</a>' +
       (p.listing ? '<button type="button" data-detail="' + p.id + '">' + ic('info') + ' Details</button>' : '') +
@@ -636,9 +595,9 @@
     if (!state.results.length) { toast('Nothing to download yet. Scan first.', 'err'); return; }
     var name = 'punestay-nearby-' + new Date().toISOString().slice(0, 10);
     if (b.dataset.fmt === 'csv') {
-      var cols = ['rank', 'name', 'category', 'subcategory', 'distance_m', 'bearing_deg', 'address', 'phone', 'website', 'opening_hours', 'lat', 'lng'];
+      var cols = ['rank', 'name', 'type', 'for', 'rent_min', 'status', 'distance_m', 'bearing_deg', 'address', 'phone', 'website', 'source', 'lat', 'lng'];
       var rows = [cols.join(',')].concat(state.results.map(function (f, i) {
-        var p = f.properties, vals = [i + 1, p.name, p.label, p.subcategory, p.distance_m, p.bearing_deg, p.address, p.phone, p.website, p.opening_hours, lat_(f), lng_(f)];
+        var p = f.properties, vals = [i + 1, p.name, p.category, p.gender, p.rent_min, p.status, p.distance_m, p.bearing_deg, p.address, p.phone, p.website, p.source_label, lat_(f), lng_(f)];
         return vals.map(function (v) { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(',');
       }));
       download(name + '.csv', '﻿' + rows.join('\n'), 'text/csv;charset=utf-8');
@@ -749,12 +708,9 @@
   $('basemaps').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) { setBasemap(b.dataset.base, true); syncUrl(); } });
   $('overlays').addEventListener('change', function (e) { if (e.target.dataset.overlay) setOverlay(e.target.dataset.overlay, e.target.checked); });
   function renderLegend() {
-    var present = {};
-    categories.forEach(function (c) { present[groupOf(c.category)] = true; });
-    present.stay = true;
-    $('legend-body').innerHTML = Object.keys(GROUPS).filter(function (g) { return present[g]; }).map(function (g) {
-      return '<span style="--c:' + GROUPS[g].color + '"><i></i>' + ic(GROUPS[g].icon) + esc(GROUPS[g].label) + '</span>';
-    }).join('') + '<span class="you"><i></i>' + ic('locate-fixed') + 'You are here</span>';
+    $('legend-body').innerHTML = TYPES.map(function (t) {
+      return '<span style="--c:' + t.color + '"><i></i>' + ic(t.icon) + esc(t.label) + '</span>';
+    }).join('') + '<span class="you"><i></i>' + ic('locate-fixed') + 'You are here</span><span style="--c: var(--primary)"><i></i>' + ic('circle-dashed') + 'Search ring</span>';
     icons();
   }
   qs('.legend-head').addEventListener('click', function () { var l = $('legend'); l.classList.toggle('closed'); qs('.legend-head').setAttribute('aria-expanded', String(!l.classList.contains('closed'))); });
@@ -851,7 +807,7 @@
   // ======================= tour =======================
   var TOUR = [
     { el: function () { return isNarrow() ? $('searchbar') : $('searchbar'); }, title: 'Where are you?', text: 'Search an address or PIN code, press the locate button, type coordinates, or simply tap the map.' },
-    { el: function () { return $('group-chips'); }, title: 'Pick a category', text: 'Choose a service category, then a service type if you want to narrow it down.' },
+    { el: function () { return $('type-chips'); }, title: 'PG or hostel?', text: 'Choose the kind of place, then who it is for: anyone, boys or girls.' },
     { el: function () { return $('mode'); }, title: 'Radius or nearest N', text: 'Within a radius finds everything inside the ring. Nearest N returns the N closest places wherever they are.' },
     { el: function () { return $('btn-scan'); }, title: 'Scan nearby', text: 'The ring sweeps, PostGIS answers, and the results appear by distance.' },
     { el: function () { return isNarrow() ? $('sheet') : $('results'); }, title: 'Results', text: 'Click a card to fly to its marker, open the arrow for phone and directions, and use ↑ ↓ to move through the list.' },
@@ -911,21 +867,14 @@
       .catch(function () { $('api-banner').hidden = false; icons(); });
   }
   function loadCategories() {
-    return fetch(API + '/nearby/categories')
+    renderGroupChips(); renderLegend();
+    return fetch(API + '/listings/nearby/summary')
       .then(function (r) { if (!r.ok) throw new Error('API error ' + r.status); return r.json(); })
-      .then(function (list) {
-        categories = list;
-        var total = list.reduce(function (s, c) { return s + c.count; }, 0);
-        var groups = {}; list.forEach(function (c) { groups[groupOf(c.category)] = true; });
-        countUp($('stat-services'), total); countUp($('stat-types'), list.length); countUp($('stat-groups'), Object.keys(groups).length);
-        if (state.cat && !isStay() && !list.some(function (c) { return c.category === state.cat; })) { state.cat = ''; }
-        renderGroupChips(); renderTypeChips(); renderLegend();
+      .then(function (s) {
+        TYPES[0].count = s.pg || 0; TYPES[1].count = s.hostel || 0;
+        countUp($('stat-services'), s.total || 0); countUp($('stat-types'), s.pg || 0); countUp($('stat-groups'), s.hostel || 0);
+        renderGroupChips();
         $('api-banner').hidden = true;
-        return fetch(API + '/listings/nearby/summary').then(function (r) { return r.ok ? r.json() : null; }).then(function (s) {
-          if (!s) return;
-          STAY_CATS[0].count = s.pg || 0; STAY_CATS[1].count = s.hostel || 0;
-          renderGroupChips(); renderTypeChips();
-        }).catch(function () { /* the PG group simply shows without counts */ });
       })
       .catch(function () { $('api-banner').hidden = false; icons(); });
   }

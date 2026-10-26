@@ -24,7 +24,7 @@
   --font-mono: "JetBrains Mono", Consolas, monospace;
   /* category group colours: an icon and a label always sit next to the colour */
   --c-healthcare: #f43f5e; --c-food: #f97316; --c-transport: #3b82f6; --c-education: #8b5cf6;
-  --c-public: #06b6d4; --c-commercial: #ec4899; --c-recreation: #22c55e; --c-other: #94a3b8; --c-stay: #a3e635;
+  --c-public: #06b6d4; --c-commercial: #ec4899; --c-recreation: #22c55e; --c-other: #94a3b8; --c-stay: #a3e635; --c-hostel: #38bdf8;
   --ease: 180ms cubic-bezier(0.2, 0, 0, 1);
   --ease-out: 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }

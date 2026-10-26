@@ -12,9 +12,34 @@
   'use strict';
 
   // ======================= configuration =======================
-  var API = location.protocol === 'file:' ? 'http://localhost:8000' : '/api';
+  // Every URL the page talks to lives here. The Vite dev server (5173) and `npm run preview` (4173) proxy /api
+  // to FastAPI; any other origin (file://, python -m http.server, ...) calls the API directly, which needs its
+  // origin in CORS_ORIGINS in .env.
+  var API = /^(5173|4173)$/.test(location.port) ? '/api' : 'http://localhost:8000';
+  var URLS = {
+    health: API + '/health',
+    nearby: API + '/listings/nearby',                  // PostGIS radius / nearest-N search (metres on the geography type)
+    summary: API + '/listings/nearby/summary',         // counts for the chips and the intro
+    listing: API + '/listings/',                       // + id: details, photos, nearest services
+    geocode: API + '/geocode',                         // Nominatim through the backend: cached, throttled to 1 request/s, Find/Enter only
+    reverse: API + '/geocode/reverse',                 // Nominatim reverse through the backend, same cache and throttle
+    destinations: API + '/destinations',               // 1,010 colleges and offices in our own database (safe for as-you-type)
+    areas: API + '/areas'                              // localities in our own database
+  };
   var GEOSERVER = 'http://localhost:8080/geoserver';
   var WS = 'punestay';
+  var WMS_URL = GEOSERVER + '/' + WS + '/wms';
+  var TILES = {   // all free, no key; attribution is shown for whichever is active
+    osm: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    hot: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+    light: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    dark: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    terrain: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    esri: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    esriLabels: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'
+  };
+  // thumbnail tile over central Pune: z=12, x=2887, y=1820 (Esri URLs take z/y/x)
+  function thumbOf(tpl) { return tpl.replace('{s}', 'a').replace('{z}', '12').replace('{x}', '2887').replace('{y}', '1820'); }
   var PUNE = { lat: 18.5204, lng: 73.8567 };
   var SAMPLE = { lat: 18.5308, lng: 73.8575, name: 'Sample spot: Shivajinagar' };
   var BBOX = { south: 18.40, west: 73.62, north: 18.75, east: 74.05 };   // same as PUNE_BBOX in .env
@@ -124,19 +149,22 @@
   L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
 
   var OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+  var ESRI_GRAY_ATTR = 'Tiles &copy; <a href="https://www.esri.com/">Esri</a>, HERE, Garmin, ' + OSM_ATTR;
   var BASEMAPS = {
-    osm: { label: 'OpenStreetMap', thumb: 'https://a.tile.openstreetmap.org/12/2887/1820.png',
-      layer: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: OSM_ATTR }) },
-    light: { label: 'Light', thumb: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/12/1820/2887',
-      layer: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, attribution: 'Tiles &copy; Esri, HERE, Garmin, OpenStreetMap contributors' }) },
-    dark: { label: 'Dark', thumb: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/12/1820/2887',
-      layer: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, attribution: 'Tiles &copy; Esri, HERE, Garmin, OpenStreetMap contributors' }) },
-    terrain: { label: 'Terrain', thumb: 'https://a.tile.opentopomap.org/12/2887/1820.png',
-      layer: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17, attribution: '&copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)' }) },
-    satellite: { label: 'Satellite', thumb: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/12/1820/2887',
+    osm: { label: 'OpenStreetMap', thumb: thumbOf(TILES.osm),
+      layer: L.tileLayer(TILES.osm, { maxZoom: 19, subdomains: 'abc', attribution: OSM_ATTR }) },
+    hot: { label: 'Humanitarian', thumb: thumbOf(TILES.hot),
+      layer: L.tileLayer(TILES.hot, { maxZoom: 19, subdomains: 'abc', attribution: OSM_ATTR + ', tiles <a href="https://www.hotosm.org/">HOT</a> hosted by OSM France' }) },
+    light: { label: 'Light', thumb: thumbOf(TILES.light),
+      layer: L.tileLayer(TILES.light, { maxZoom: 16, attribution: ESRI_GRAY_ATTR }) },
+    dark: { label: 'Dark', thumb: thumbOf(TILES.dark),
+      layer: L.tileLayer(TILES.dark, { maxZoom: 16, attribution: ESRI_GRAY_ATTR }) },
+    terrain: { label: 'Terrain', thumb: thumbOf(TILES.terrain),
+      layer: L.tileLayer(TILES.terrain, { maxZoom: 17, subdomains: 'abc', attribution: '&copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA), ' + OSM_ATTR }) },
+    satellite: { label: 'Satellite', thumb: thumbOf(TILES.esri),
       layer: L.layerGroup([
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics' }),
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 })
+        L.tileLayer(TILES.esri, { maxZoom: 19, attribution: 'Tiles &copy; Esri &mdash; Esri, Maxar, Earthstar Geographics' }),
+        L.tileLayer(TILES.esriLabels, { maxZoom: 19 })
       ]) }
   };
   var activeBase = null;
@@ -156,9 +184,9 @@
   var markers = {};               // id -> marker
   var wms = {};                   // key -> L.tileLayer.wms
   function wmsLayer(cql, layerName) {
-    var opts = { layers: WS + ':' + (layerName || 'services'), format: 'image/png', transparent: true, opacity: 0.8, attribution: 'GeoServer' };
+    var opts = { layers: WS + ':' + (layerName || 'services'), format: 'image/png', transparent: true, version: '1.1.1', opacity: 0.8, attribution: 'GeoServer' };
     if (cql) opts.CQL_FILTER = cql;
-    var l = L.tileLayer.wms(GEOSERVER + '/' + WS + '/wms', opts);
+    var l = L.tileLayer.wms(WMS_URL, opts);
     l.on('tileerror', function () { if (!l._warned) { l._warned = true; toast('GeoServer overlay could not be loaded. Is GeoServer running on port 8080?', 'err'); } });
     return l;
   }
@@ -167,7 +195,9 @@
     { key: 'ring', label: 'Search ring', icon: 'circle-dashed', on: true },
     { key: 'heat', label: 'Heatmap of results', icon: 'flame', on: false },
     { key: 'wmsAll', label: 'All PGs and hostels (GeoServer WMS)', icon: 'server', on: false, layer: 'listings_public' },
-    { key: 'wmsStops', label: 'Bus stops and metro around (GeoServer WMS)', icon: 'bus', color: 'var(--c-transport)', on: false, cql: "category IN ('bus_stop','metro')" }
+    { key: 'wmsPg', label: 'PGs only (WMS)', icon: 'bed-double', color: 'var(--c-stay)', on: false, layer: 'listings_public', cql: "listing_type='pg'" },
+    { key: 'wmsHostel', label: 'Hostels only (WMS)', icon: 'building', color: 'var(--c-hostel)', on: false, layer: 'listings_public', cql: "listing_type='hostel'" },
+    { key: 'wmsStops', label: 'Bus stops and metro around (WMS)', icon: 'bus', color: 'var(--c-transport)', on: false, cql: "category IN ('bus_stop','metro')" }
   ];
   function setOverlay(key, on) {
     state.overlays[key] = on;
@@ -201,7 +231,7 @@
 
   // cursor readout
   map.on('mousemove', function (e) { $('cursor').textContent = fmt(e.latlng.lat, e.latlng.lng); });
-  map.on('click', function (e) { if (document.body.classList.contains('introing')) return; setLocation({ lat: round6(e.latlng.lat), lng: round6(e.latlng.lng), name: 'Map point', source: 'map click' }); });
+  map.on('click', function (e) { if (document.body.classList.contains('introing')) return; setLocation({ lat: round6(e.latlng.lat), lng: round6(e.latlng.lng), name: 'Dropped pin', source: 'map click', reverse: true }); });
 
   // ======================= location =======================
   function setLocation(loc, opts) {
@@ -221,7 +251,7 @@
       userMarker = L.marker([loc.lat, loc.lng], { icon: L.divIcon({ className: 'user-dot drop', html: '<i></i>', iconSize: [18, 18], iconAnchor: [9, 9] }), draggable: true, zIndexOffset: 1000, title: 'You are here (drag me)' }).addTo(map);
       userMarker.on('dragend', function () {
         var p = userMarker.getLatLng();
-        if (!setLocation({ lat: round6(p.lat), lng: round6(p.lng), name: 'Dragged pin', source: 'drag' }, { noFly: true })) userMarker.setLatLng([state.loc.lat, state.loc.lng]);
+        if (!setLocation({ lat: round6(p.lat), lng: round6(p.lng), name: 'Dropped pin', source: 'drag', reverse: true }, { noFly: true })) userMarker.setLatLng([state.loc.lat, state.loc.lng]);
       });
     } else {
       userMarker.setLatLng([loc.lat, loc.lng]);
@@ -232,7 +262,23 @@
     syncUrl();
     if (!opts.silent) toast('Location set: ' + (loc.name || fmt(loc.lat, loc.lng)), 'ok');
     if (opts.scan || state.results.length) scan();
+    if (loc.reverse) reverseName(loc);
     return true;
+  }
+  // Name a clicked, dragged or GPS point: Nominatim reverse through the backend (cached, throttled to 1 request/s).
+  var reverseAbort = null;
+  function reverseName(loc) {
+    if (reverseAbort) reverseAbort.abort();
+    reverseAbort = new AbortController();
+    fetch(URLS.reverse + '?lat=' + loc.lat + '&lng=' + loc.lng, { signal: reverseAbort.signal })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (hit) {
+        if (!hit || !hit.display || state.loc !== loc) return;
+        loc.name = hit.display;
+        $('loc-name').textContent = loc.name;
+        syncUrl();
+      })
+      .catch(function () { /* keep "Dropped pin" */ });
   }
   function clearLocation() {
     state.loc = null;
@@ -257,14 +303,14 @@
     var t = toast('Finding your location…', 'load', { sticky: true });
     navigator.geolocation.getCurrentPosition(function (pos) {
       t.dismiss();
-      setLocation({ lat: round6(pos.coords.latitude), lng: round6(pos.coords.longitude), name: 'Your location', source: 'GPS ±' + Math.round(pos.coords.accuracy || 0) + ' m' });
+      setLocation({ lat: round6(pos.coords.latitude), lng: round6(pos.coords.longitude), name: 'Your location', source: 'GPS ±' + Math.round(pos.coords.accuracy || 0) + ' m', reverse: true });
     }, function (err) {
       t.dismiss();
       var msg = { 1: 'Location permission was denied. Allow it in the browser, or tap the map / type coordinates.',
                   2: 'Your position is unavailable right now. Tap the map or type coordinates.',
                   3: 'Finding your location timed out. Try again, or tap the map.' }[err.code] || 'Could not get your location.';
       toast(msg + (state.loc ? ' Kept your previous location.' : ''), 'err');
-    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+    }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
   }
 
   // coordinates popover
@@ -296,46 +342,102 @@
     setLocation({ lat: round6(lat), lng: round6(lng), name: 'Typed coordinates', source: 'coordinates' });
   }
 
-  // address / PIN search (PuneStay geocoder: Nominatim, cached on the server)
-  var q = $('q'), suggest = $('suggest'), geoAbort = null, geoTimer = null, suggestion = null;
+  // ---------- search box ----------
+  // As you type: suggestions come only from our own database (colleges, offices, localities), debounced 300 ms,
+  // at least 2 characters, old requests cancelled, up to 6 results, keyboard ↑ ↓ Enter Esc.
+  // Find / Enter: a chosen suggestion, typed "lat, lng" coordinates, a 6-digit PIN code, or a free-text address
+  // through the backend geocoder (Nominatim, cached and throttled there; never used for autocomplete).
+  var q = $('q'), suggest = $('suggest'), geoAbort = null, sugAbort = null, sugTimer = null;
+  var suggestions = [], sugIndex = -1, localities = [];
+  fetch(URLS.areas + '?min_listings=1').then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (rows) { localities = rows.map(function (a) { return { name: a.locality, kind: 'locality', lat: a.lat, lng: a.lng, note: a.listings + ' places' }; }); })
+    .catch(function () { /* suggestions then come from colleges and offices only */ });
+
   q.addEventListener('input', function () {
-    clearTimeout(geoTimer);
+    clearTimeout(sugTimer);
     var term = q.value.trim();
-    if (term.length < 3) { hideSuggest(); return; }
-    geoTimer = setTimeout(function () { geocode(term, false); }, 350);
+    if (term.length < 2 || /^[\d\s.,-]+$/.test(term)) { hideSuggest(); return; }
+    sugTimer = setTimeout(function () { suggestLocal(term); }, 300);
   });
   q.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') { e.preventDefault(); if (suggestion) pickSuggestion(); else geocode(q.value.trim(), true); }
-    if (e.key === 'Escape') hideSuggest();
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (!suggestions.length) return;
+      e.preventDefault();
+      sugIndex = (sugIndex + (e.key === 'ArrowDown' ? 1 : -1) + suggestions.length) % suggestions.length;
+      renderSuggest();
+    } else if (e.key === 'Enter') { e.preventDefault(); find(); }
+    else if (e.key === 'Escape') hideSuggest();
   });
   q.addEventListener('blur', function () { setTimeout(hideSuggest, 150); });
-  $('btn-find').addEventListener('click', function () { if (suggestion) pickSuggestion(); else geocode(q.value.trim(), true); });
-  function hideSuggest() { suggest.hidden = true; suggest.innerHTML = ''; suggestion = null; }
-  function pickSuggestion() { var s = suggestion; hideSuggest(); setLocation({ lat: s.lat, lng: s.lng, name: s.name, source: s.pin ? 'PIN code' : 'address' }); }
-  function geocode(term, submit) {
-    if (!term) { if (submit) toast('Type an address, a locality or a 6-digit PIN code.', 'err'); return; }
+  $('btn-find').addEventListener('click', find);
+
+  function suggestLocal(term) {
+    if (sugAbort) sugAbort.abort();
+    sugAbort = new AbortController();
+    var t = term.toLowerCase();
+    var local = localities.filter(function (l) { return l.name.toLowerCase().indexOf(t) >= 0; }).slice(0, 3);
+    fetch(URLS.destinations + '?q=' + encodeURIComponent(term) + '&limit=6', { signal: sugAbort.signal })
+      .then(function (r) { return r.ok ? r.json() : { features: [] }; })
+      .then(function (fc) {
+        var dest = (fc.features || []).map(function (f) { return { name: f.properties.name, kind: f.properties.kind, lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] }; });
+        suggestions = local.concat(dest).slice(0, 6);
+        sugIndex = suggestions.length ? 0 : -1;
+        renderSuggest();
+      })
+      .catch(function (e) { if (e.name !== 'AbortError') { suggestions = local; sugIndex = local.length ? 0 : -1; renderSuggest(); } });
+  }
+  function renderSuggest() {
+    if (!suggestions.length) { hideSuggest(); return; }
+    var kindIcon = { college: 'graduation-cap', office: 'briefcase', locality: 'map-pin' };
+    suggest.innerHTML = suggestions.map(function (s, i) {
+      return '<li class="' + (i === sugIndex ? 'on' : '') + '" role="option" aria-selected="' + (i === sugIndex) + '" data-i="' + i + '">' + ic(kindIcon[s.kind] || 'map-pin') +
+        '<span>' + esc(s.name) + '</span><span class="mono">' + esc(s.note || s.kind) + '</span></li>';
+    }).join('');
+    suggest.hidden = false;
+    qsa('li', suggest).forEach(function (li) {
+      li.addEventListener('mousedown', function (e) { e.preventDefault(); pickSuggestion(suggestions[Number(li.dataset.i)]); });
+      li.addEventListener('mouseenter', function () { sugIndex = Number(li.dataset.i); qsa('li', suggest).forEach(function (x) { x.classList.toggle('on', x === li); }); });
+    });
+    icons();
+  }
+  function hideSuggest() { suggest.hidden = true; suggest.innerHTML = ''; suggestions = []; sugIndex = -1; }
+  function pickSuggestion(s) {
+    hideSuggest();
+    q.value = s.name;
+    setLocation({ lat: round6(s.lat), lng: round6(s.lng), name: s.name, source: s.kind === 'locality' ? 'locality' : s.kind });
+  }
+  function find() {
+    var term = q.value.trim();
+    if (sugIndex >= 0 && suggestions[sugIndex]) { pickSuggestion(suggestions[sugIndex]); return; }
+    if (!term) { toast('Type an address, a locality, a college, an office, a 6-digit PIN code or "lat, lng".', 'err'); return; }
+    // "18.52, 73.85" typed straight into the box
+    var m = term.match(/^\s*(-?\d{1,2}(?:\.\d+)?)\s*[, ]\s*(-?\d{1,3}(?:\.\d+)?)\s*$/);
+    if (m) {
+      var lat = Number(m[1]), lng = Number(m[2]);
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) { toast('Latitude must be within ±90 and longitude within ±180.', 'err'); return; }
+      hideSuggest();
+      setLocation({ lat: round6(lat), lng: round6(lng), name: 'Typed coordinates', source: 'coordinates', reverse: true });
+      return;
+    }
     var pin = /^\d+$/.test(term);
     if (pin && !/^\d{6}$/.test(term)) { toast('A PIN code has 6 digits, for example 411005.', 'err'); return; }
+    geocode(term, pin);
+  }
+  function geocode(term, pin) {
     var query = pin ? term + ', Pune, Maharashtra' : (/pune/i.test(term) ? term : term + ', Pune');
     if (geoAbort) geoAbort.abort();
     geoAbort = new AbortController();
-    var t = submit ? toast('Searching ' + term + '…', 'load', { sticky: true }) : null;
-    fetch(API + '/geocode?q=' + encodeURIComponent(query), { signal: geoAbort.signal })
+    var t = toast('Searching ' + term + '…', 'load', { sticky: true });
+    fetch(URLS.geocode + '?q=' + encodeURIComponent(query), { signal: geoAbort.signal })
       .then(function (r) { return r.json().then(function (b) { if (!r.ok) throw new Error(b.detail || 'Geocoding failed (' + r.status + ')'); return b; }); })
       .then(function (hit) {
-        if (t) t.dismiss();
-        suggestion = { lat: round6(hit.lat), lng: round6(hit.lng), name: shortName(hit.display || term), pin: pin };
-        if (submit) { pickSuggestion(); return; }
-        suggest.innerHTML = '<li class="on" role="option">' + ic(pin ? 'hash' : 'map-pin') + '<span>' + esc(suggestion.name) + '</span><span class="mono">' + fmt(suggestion.lat, suggestion.lng) + '</span></li>';
-        suggest.hidden = false;
-        suggest.firstChild.addEventListener('mousedown', function (e) { e.preventDefault(); pickSuggestion(); });
-        icons();
+        t.dismiss(); hideSuggest();
+        setLocation({ lat: round6(hit.lat), lng: round6(hit.lng), name: shortName(hit.display || term), source: pin ? 'PIN code' : 'address' });
       })
       .catch(function (e) {
         if (e.name === 'AbortError') return;
-        if (t) t.dismiss();
-        hideSuggest();
-        if (submit) toast((/No match/i.test(e.message) ? 'Address not found inside Pune. Try adding the locality name, or tap the map.' : e.message) + (state.loc ? ' Kept your previous location.' : ''), 'err');
+        t.dismiss();
+        toast((/No match/i.test(e.message) ? 'Address not found inside Pune. Try adding the locality name, or tap the map.' : e.message) + (state.loc ? ' Kept your previous location.' : ''), 'err');
       });
   }
   function shortName(display) { return display.split(',').slice(0, 3).join(',').trim(); }
@@ -410,7 +512,6 @@
     else { p.set('limit', state.n); }
     return p;
   }
-  function endpoint() { return isStay() ? '/listings/nearby' : '/nearby'; }
   function scan(animate) {
     if (!state.loc) { toast('Set a location first: tap the map, use your location or search.', 'err'); return; }
     hasScanned = true;
@@ -420,7 +521,7 @@
     showState('loading');
     if (animate) scanAnimation();
     var t = toast('Scanning ' + (state.mode === 'radius' ? 'within ' + metres(radiusM()) : 'for the nearest ' + state.n) + '…', 'load', { sticky: true });
-    fetch(API + endpoint() + '?' + queryParams().toString(), { signal: scanAbort.signal })
+    fetch(URLS.nearby + '?' + queryParams().toString(), { signal: scanAbort.signal })
       .then(function (r) { return r.json().then(function (b) { if (!r.ok) throw new Error(b.detail || 'The API answered ' + r.status); return b; }); })
       .then(function (fc) {
         clearTimeout(timeout); t.dismiss();
@@ -635,7 +736,7 @@
     detailBody.innerHTML = '<div class="d-loading"><div></div><div></div><div></div></div>';
     if (detailAbort) detailAbort.abort();
     detailAbort = new AbortController();
-    fetch(API + '/listings/' + id, { signal: detailAbort.signal })
+    fetch(URLS.listing + id, { signal: detailAbort.signal })
       .then(function (r) { return r.json().then(function (b) { if (!r.ok) throw new Error(b.detail || 'Could not load this place (' + r.status + ')'); return b; }); })
       .then(renderDetail)
       .catch(function (e) { if (e.name !== 'AbortError') detailBody.innerHTML = '<div class="state">' + ic('triangle-alert') + '<b>Could not load</b><p class="muted small">' + esc(e.message) + '</p></div>'; icons(); });
@@ -862,13 +963,13 @@
   // ======================= start-up =======================
   var pendingLoc = null;
   function checkApi(fromRetry) {
-    return fetch(API + '/health').then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+    return fetch(URLS.health).then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
       .then(function (h) { $('api-banner').hidden = true; if (fromRetry) { toast('API is back', 'ok'); loadCategories(); } return h; })
       .catch(function () { $('api-banner').hidden = false; icons(); });
   }
   function loadCategories() {
     renderGroupChips(); renderLegend();
-    return fetch(API + '/listings/nearby/summary')
+    return fetch(URLS.summary)
       .then(function (r) { if (!r.ok) throw new Error('API error ' + r.status); return r.json(); })
       .then(function (s) {
         TYPES[0].count = s.pg || 0; TYPES[1].count = s.hostel || 0;

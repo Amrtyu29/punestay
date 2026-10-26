@@ -400,6 +400,16 @@ hospital, pharmacy, ATM, grocery and police station, CSV and GeoJSON downloads, 
 `/?lat=18.52&lng=73.85&type=hostel&gender=female&radius=2000`, and a bottom sheet on phones. The generic
 22-category services search remains available in the app's **Nearby** sidebar tab and through `GET /nearby`.
 
+Maps and geocoding in Sonar follow the providers' usage rules. Basemaps (all free, no key): OpenStreetMap, Humanitarian
+OSM, Esri light and dark gray canvases, OpenTopoMap and Esri World Imagery, each with its own attribution; the dark or
+light one follows the theme until a choice is saved. As-you-type suggestions come only from our own database (colleges,
+offices and localities through `/destinations` and `/areas`), because Nominatim forbids autocomplete; Nominatim is used
+through the backend's cached, throttled (1 request/s) `/geocode` and `/geocode/reverse` only when you press Find or
+Enter, or to name a clicked pin. "lat, lng" typed into the box is taken as coordinates, and a number must be a 6-digit
+PIN code. Serve the page from the Vite dev server (`npm run dev`, port 5173) or `npm run preview` (port 4173): both
+proxy `/api` to FastAPI, and browser geolocation needs localhost or HTTPS, never `file://`. Served from any other
+origin, the page calls `http://localhost:8000` directly, so add that origin to `CORS_ORIGINS` in `.env`.
+
 The React map app at http://localhost:5173/app/ (`frontend/app/index.html`, `frontend/src/`) is the extension:
 listings with clustering and cards, commute filters and directions, the rent heatmap, compare areas, saved places,
 adding and claiming listings with the trust rules, and the admin pages. Its home map also has a **Nearby** sidebar

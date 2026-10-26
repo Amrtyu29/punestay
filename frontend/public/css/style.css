@@ -119,6 +119,8 @@ code { font-family: var(--font-mono); font-size: 12px; }
 /* ---------- map ---------- */
 #map { position: absolute; inset: 0; background: var(--bg); transition: filter 400ms ease; }
 .leaflet-container { font-family: var(--font-ui); background: var(--bg); }
+.leaflet-gl-layer { z-index: 1; }
+.maplibregl-canvas { outline: none; }
 .leaflet-left .leaflet-control-zoom { margin-left: 16px; margin-bottom: 118px; }
 .leaflet-bottom.leaflet-left { bottom: 0; }
 .leaflet-control-scale { margin-left: 16px !important; margin-bottom: 92px !important; }
@@ -358,6 +360,38 @@ input[type="range"] { width: 100%; accent-color: var(--primary); margin: 6px 0 2
 .d-loading { padding: 24px; display: flex; flex-direction: column; gap: 10px; }
 .d-loading div { height: 60px; border-radius: 14px; background: linear-gradient(90deg, var(--border) 25%, var(--border-2) 50%, var(--border) 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
 @media (max-width: 1023px) { .card.detail { right: 0; left: 0; top: auto; bottom: 0; width: auto; max-height: 70%; border-radius: var(--r) var(--r) 0 0; z-index: 1200; } }
+
+/* ---------- account, sign-in and add-listing forms ---------- */
+.hdr .btn.sm { border-radius: 999px; min-height: 40px; }
+#account-menu { top: 56px; right: 0; left: auto; min-width: 220px; }
+.menu .menu-head { padding: 8px 10px 10px; border-bottom: 1px solid var(--border); margin-bottom: 4px; font-size: 13px; }
+.menu .menu-head b { display: block; } .menu .menu-head small { display: block; }
+.menu a, .menu button { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 10px; border: none; background: transparent; font-weight: 600; width: 100%; text-align: left; }
+.menu a:hover, .menu button:hover { background: rgba(45, 226, 196, 0.12); }
+.menu a svg, .menu button svg { width: 16px; height: 16px; color: var(--primary); }
+.modal-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-right: 36px; }
+.modal-brand b { font-family: var(--font-head); font-size: 18px; display: block; }
+.modal-brand small { display: block; }
+.form label { display: block; font-size: 12px; color: var(--muted); margin-top: 10px; }
+.form label small { font-weight: 400; }
+.form input[type="text"], .form input[type="email"], .form input[type="password"], .form input[type="tel"], .form input[type="url"], .form input[type="number"], .form select {
+  display: block; width: 100%; height: 42px; margin-top: 4px; padding: 0 12px; border-radius: 11px; border: 1px solid var(--border-2); background: var(--glass-2); color: var(--text); font: inherit;
+}
+.form input:focus, .form select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(45, 226, 196, 0.18); }
+.form input[type="file"] { display: block; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.form .segmented { margin-top: 10px; }
+.form .switch { margin-top: 8px; color: var(--text); font-size: 13px; }
+.form .switch span:last-child { flex: 1; }
+.form .message { margin-top: 10px; }
+.form .btn.block { margin-top: 14px; }
+.form .grid-2 label { margin-top: 10px; }
+.form .d-section { margin-top: 12px; }
+.card.add { right: 16px; top: 112px; width: 400px; max-height: calc(100% - 200px); z-index: 960; animation: fromright 320ms var(--ease-out); }
+.card.add .card-body { padding: 0 18px 18px; }
+.card.add .loc-chip { margin-top: 4px; }
+.icon-btn.fab.primary { background: linear-gradient(135deg, var(--primary), var(--primary-2)); color: var(--primary-ink); border-color: transparent; box-shadow: var(--glow); }
+@media (max-width: 1023px) { .card.add { right: 0; left: 0; top: auto; bottom: 0; width: auto; max-height: 80%; border-radius: var(--r) var(--r) 0 0; z-index: 1200; } }
+@media (max-width: 639px) { #btn-add, #btn-auth { display: none; } #account-menu { position: fixed; top: 60px; right: 60px; } }
 
 /* ---------- layers panel ---------- */
 .layers { top: 72px; left: 16px; width: 320px; max-height: calc(100% - 110px); overflow: auto; padding: 14px 16px; }

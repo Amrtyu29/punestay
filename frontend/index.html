@@ -17,6 +17,8 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <!-- MapLibre GL inside Leaflet: draws OpenFreeMap's free vector styles (no key, no limits) as basemaps -->
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -49,6 +51,13 @@
       <span class="logo-text"><b>PuneStay <em>Sonar</em></b><small>Ping the city.</small></span>
     </a>
     <div class="hdr-actions">
+      <button id="btn-add" class="btn primary sm" type="button" title="Add a PG or hostel to the map"><i data-lucide="plus"></i> Add a PG</button>
+      <button id="btn-auth" class="btn sm" type="button" aria-haspopup="menu" aria-expanded="false"><i data-lucide="user"></i> <span id="auth-label">Sign in</span></button>
+      <div id="account-menu" class="popover glass menu" hidden role="menu">
+        <div class="menu-head"><b id="account-name"></b><small id="account-email" class="muted"></small></div>
+        <a href="/app/#/mine" target="_blank" rel="noopener" role="menuitem"><i data-lucide="list"></i> My listings (app)</a>
+        <button type="button" id="btn-logout" role="menuitem"><i data-lucide="log-out"></i> Sign out</button>
+      </div>
       <button id="btn-help" class="icon-btn" type="button" aria-label="Help (?)" title="Help (?)"><i data-lucide="circle-help"></i></button>
       <button id="btn-theme" class="icon-btn" type="button" aria-label="Switch theme (T)" title="Theme (T)"><i data-lucide="sun-moon"></i></button>
       <button id="btn-layers" class="icon-btn" type="button" aria-label="Map layers (L)" title="Layers (L)" aria-expanded="false"><i data-lucide="layers"></i></button>
@@ -218,10 +227,73 @@
     <div class="sheet-pane" data-pane="results" id="sheet-results" hidden></div>
   </div>
   <div class="mobile-fabs" id="mobile-fabs">
+    <button class="icon-btn fab primary" type="button" data-proxy="btn-add" aria-label="Add a PG"><i data-lucide="plus"></i></button>
+    <button class="icon-btn fab" type="button" data-proxy="btn-auth" aria-label="Account"><i data-lucide="user"></i></button>
     <button class="icon-btn fab" type="button" data-proxy="btn-help" aria-label="Help"><i data-lucide="circle-help"></i></button>
     <button class="icon-btn fab" type="button" data-proxy="btn-theme" aria-label="Theme"><i data-lucide="sun-moon"></i></button>
     <button class="icon-btn fab" type="button" data-proxy="btn-layers" aria-label="Layers"><i data-lucide="layers"></i></button>
   </div>
+
+  <!-- ================= sign in / create account ================= -->
+  <div id="auth" class="modal-backdrop" hidden>
+    <form class="modal glass form" id="auth-form" role="dialog" aria-modal="true" aria-labelledby="auth-title" novalidate>
+      <button class="icon-btn sm modal-close" type="button" aria-label="Close" data-close="auth"><i data-lucide="x"></i></button>
+      <div class="modal-brand"><span class="radar small" aria-hidden="true"><span></span><span></span><i></i></span><div><b id="auth-title">Welcome back</b><small class="muted" id="auth-sub">Sign in to add, confirm or claim places.</small></div></div>
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" data-atab="login" class="on">Sign in</button>
+        <button type="button" role="tab" data-atab="register">Create account</button>
+      </div>
+      <div class="reg-only" hidden>
+        <label>Your name <input id="a-name" type="text" autocomplete="name" minlength="2" /></label>
+        <div class="segmented" id="a-role" role="radiogroup" aria-label="I am">
+          <button type="button" data-role="student" class="on" role="radio" aria-checked="true">Looking for a place</button>
+          <button type="button" data-role="owner" role="radio" aria-checked="false">I own a PG / hostel</button>
+        </div>
+      </div>
+      <label>Email <input id="a-email" type="email" autocomplete="email" required /></label>
+      <label class="reg-only" hidden>Phone <small class="muted">shown to students only on your listings</small> <input id="a-phone" type="tel" autocomplete="tel" pattern="[0-9+\- ]{8,15}" /></label>
+      <label>Password <small class="muted reg-only" hidden>8 or more characters</small> <input id="a-password" type="password" autocomplete="current-password" required minlength="1" /></label>
+      <div id="auth-error" class="message" hidden></div>
+      <button class="btn primary block" type="submit" id="auth-submit">Sign in</button>
+      <p class="muted small" style="margin-top:8px">A new account's first listing is checked by an admin before it appears on the map. Confirming a place works only from within 300 m of it.</p>
+    </form>
+  </div>
+
+  <!-- ================= add a PG / hostel (stays inside Sonar) ================= -->
+  <aside id="add" class="card glass add" hidden aria-label="Add a PG or hostel" role="dialog">
+    <div class="card-head">
+      <h2><i data-lucide="plus"></i> Add a PG or hostel</h2>
+      <button class="icon-btn sm" type="button" aria-label="Close" data-close="add"><i data-lucide="x"></i></button>
+    </div>
+    <form class="card-body form" id="add-form" novalidate>
+      <p id="add-note" class="muted small"></p>
+      <div class="loc-chip" id="add-loc">
+        <i data-lucide="map-pin"></i>
+        <span class="loc-text"><b id="add-loc-name">Tap the map where the place is</b><small id="add-loc-coords" class="mono">the amber pin is used as the location</small></span>
+      </div>
+      <label>Name of the place <input id="f-name" type="text" required minlength="3" maxlength="120" placeholder="e.g. Shree Sai Girls PG" /></label>
+      <label>Address <input id="f-address" type="text" required minlength="5" maxlength="300" placeholder="Lane, locality, Pune" /></label>
+      <div class="grid-2">
+        <label>Type <select id="f-type"><option value="pg">PG</option><option value="hostel">Hostel</option></select></label>
+        <label>For <select id="f-gender"><option value="any">Anyone</option><option value="male">Boys only</option><option value="female">Girls only</option></select></label>
+      </div>
+      <div class="grid-2">
+        <label>Rent per month (₹) <input id="f-rent" type="number" required min="500" max="500000" step="100" placeholder="7000" /></label>
+        <label>Up to (₹, optional) <input id="f-rent-max" type="number" min="500" max="500000" step="100" placeholder="9000" /></label>
+      </div>
+      <div class="grid-2">
+        <label>Deposit (₹) <input id="f-deposit" type="number" min="0" step="500" placeholder="10000" /></label>
+        <label>Phone students can call <input id="f-phone" type="tel" pattern="[0-9+\- ]{8,15}" placeholder="98xxxxxxxx" /></label>
+      </div>
+      <label>Website or Instagram (optional) <input id="f-website" type="url" placeholder="https://" /></label>
+      <label class="switch"><input id="f-food" type="checkbox" /><span class="tog"></span><span>Food included</span></label>
+      <label class="switch"><input id="f-vacancy" type="checkbox" checked /><span class="tog"></span><span>Rooms available right now</span></label>
+      <div class="d-section"><h4>Amenities</h4><div class="chips" id="f-amenities"></div></div>
+      <label>Photos <small class="muted">up to 5</small> <input id="f-photos" type="file" accept="image/*" multiple /></label>
+      <div id="add-error" class="message" hidden></div>
+      <button class="btn primary block" type="submit" id="add-submit"><i data-lucide="upload"></i> Publish listing</button>
+    </form>
+  </aside>
 
   <!-- ================= help modal ================= -->
   <div id="help" class="modal-backdrop" hidden>
@@ -277,6 +349,8 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"></script>
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
   <script src="js/app.js"></script>
 </body>

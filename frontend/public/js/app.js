@@ -24,8 +24,11 @@
     geocode: API + '/geocode',                         // Nominatim through the backend: cached, throttled to 1 request/s, Find/Enter only
     reverse: API + '/geocode/reverse',                 // Nominatim reverse through the backend, same cache and throttle
     destinations: API + '/destinations',               // 1,010 colleges and offices in our own database (safe for as-you-type)
-    areas: API + '/areas'                              // localities in our own database
+    areas: API + '/areas',                             // localities in our own database
+    login: API + '/auth/login', register: API + '/auth/register', me: API + '/auth/me',
+    listings: API + '/listings'                        // POST creates a listing; POST /listings/{id}/photos adds photos
   };
+  var TOKEN_KEY = 'punestay.token';                    // same key as the React app, so one sign-in works in both
   var GEOSERVER = 'http://localhost:8080/geoserver';
   var WS = 'punestay';
   var WMS_URL = GEOSERVER + '/' + WS + '/wms';
@@ -150,15 +153,25 @@
 
   var OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
   var ESRI_GRAY_ATTR = 'Tiles &copy; <a href="https://www.esri.com/">Esri</a>, HERE, Garmin, ' + OSM_ATTR;
+  // OpenFreeMap vector styles (free, no key, no limits) drawn by MapLibre inside Leaflet. If the plugin failed to
+  // load (offline CDN), the same keys fall back to raster tiles so the picker always works.
+  var OFM = 'https://tiles.openfreemap.org/styles/';
+  var OFM_ATTR = '<a href="https://openfreemap.org">OpenFreeMap</a> &copy; <a href="https://www.openmaptiles.org/">OpenMapTiles</a> ' + OSM_ATTR;
+  var hasGL = typeof L.maplibreGL === 'function' && typeof window.maplibregl === 'object';
+  function vectorOrRaster(style, rasterUrl, rasterOpts) {
+    return hasGL ? L.maplibreGL({ style: OFM + style, attribution: OFM_ATTR }) : L.tileLayer(rasterUrl, rasterOpts);
+  }
   var BASEMAPS = {
+    streets: { label: 'Streets', swatch: 'linear-gradient(135deg, #e8f1e3, #fff3cf 60%, #cfe5f5)',
+      layer: vectorOrRaster('liberty', TILES.osm, { maxZoom: 19, subdomains: 'abc', attribution: OSM_ATTR }) },
+    light: { label: 'Light', swatch: 'linear-gradient(135deg, #f7f7f5, #e4e7e2)',
+      layer: vectorOrRaster('positron', TILES.light, { maxZoom: 16, attribution: ESRI_GRAY_ATTR }) },
+    dark: { label: 'Dark', swatch: 'linear-gradient(135deg, #1b1f27, #2b3140)',
+      layer: vectorOrRaster('dark', TILES.dark, { maxZoom: 16, attribution: ESRI_GRAY_ATTR }) },
     osm: { label: 'OpenStreetMap', thumb: thumbOf(TILES.osm),
       layer: L.tileLayer(TILES.osm, { maxZoom: 19, subdomains: 'abc', attribution: OSM_ATTR }) },
     hot: { label: 'Humanitarian', thumb: thumbOf(TILES.hot),
       layer: L.tileLayer(TILES.hot, { maxZoom: 19, subdomains: 'abc', attribution: OSM_ATTR + ', tiles <a href="https://www.hotosm.org/">HOT</a> hosted by OSM France' }) },
-    light: { label: 'Light', thumb: thumbOf(TILES.light),
-      layer: L.tileLayer(TILES.light, { maxZoom: 16, attribution: ESRI_GRAY_ATTR }) },
-    dark: { label: 'Dark', thumb: thumbOf(TILES.dark),
-      layer: L.tileLayer(TILES.dark, { maxZoom: 16, attribution: ESRI_GRAY_ATTR }) },
     terrain: { label: 'Terrain', thumb: thumbOf(TILES.terrain),
       layer: L.tileLayer(TILES.terrain, { maxZoom: 17, subdomains: 'abc', attribution: '&copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA), ' + OSM_ATTR }) },
     satellite: { label: 'Satellite', thumb: thumbOf(TILES.esri),
@@ -263,6 +276,7 @@
     if (!opts.silent) toast('Location set: ' + (loc.name || fmt(loc.lat, loc.lng)), 'ok');
     if (opts.scan || state.results.length) scan();
     if (loc.reverse) reverseName(loc);
+    if (typeof refreshAddLocation === 'function') refreshAddLocation();
     return true;
   }
   // Name a clicked, dragged or GPS point: Nominatim reverse through the backend (cached, throttled to 1 request/s).
@@ -789,6 +803,167 @@
     if (b) openDetail(Number(b.dataset.detail));
   });
 
+  // ======================= account: sign in, create account, sign out =======================
+  var authUser = null, afterAuth = null;
+  function token() { try { return localStorage.getItem(TOKEN_KEY); } catch (e) { return null; } }
+  function setToken(t) { try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch (e) { /* ignore */ } }
+  function apiFetch(url, opts) {
+    opts = opts || {};
+    var headers = opts.headers || {};
+    var tk = token();
+    if (tk) headers.Authorization = 'Bearer ' + tk;
+    if (opts.json !== undefined) { headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(opts.json); }
+    opts.headers = headers;
+    return fetch(url, opts).then(function (r) {
+      if (r.status === 204) return null;
+      return r.json().catch(function () { return {}; }).then(function (b) {
+        if (!r.ok) {
+          if (r.status === 401 && tk) { setToken(null); setAuthUser(null); }
+          var d = b.detail;
+          throw new Error(typeof d === 'string' ? d : Array.isArray(d) ? d.map(function (x) { return x.msg; }).join('; ') : 'API error ' + r.status);
+        }
+        return b;
+      });
+    });
+  }
+  function setAuthUser(u) {
+    authUser = u;
+    var label = $('auth-label');
+    if (u) {
+      label.textContent = u.name.split(' ')[0];
+      $('account-name').textContent = u.name;
+      $('account-email').textContent = u.email + ' · ' + u.role + (u.trusted ? ' · trusted' : '');
+    } else { label.textContent = 'Sign in'; $('account-menu').hidden = true; }
+    $('btn-auth').classList.toggle('on-accent', !!u);
+  }
+  var authEl = $('auth'), authMode = 'login';
+  function openAuth(mode, then) {
+    afterAuth = then || null;
+    setAuthMode(mode || 'login');
+    authEl.hidden = false;
+    $('auth-error').hidden = true;
+    setTimeout(function () { $(authMode === 'login' ? 'a-email' : 'a-name').focus(); }, 50);
+  }
+  function closeAuth() { authEl.hidden = true; afterAuth = null; }
+  function setAuthMode(mode) {
+    authMode = mode;
+    qsa('[data-atab]').forEach(function (b) { b.classList.toggle('on', b.dataset.atab === mode); });
+    qsa('.reg-only', authEl).forEach(function (el) { el.hidden = mode !== 'register'; });
+    $('auth-title').textContent = mode === 'login' ? 'Welcome back' : 'Join PuneStay';
+    $('auth-sub').textContent = mode === 'login' ? 'Sign in to add, confirm or claim places.' : 'One account to list a place or confirm one.';
+    $('auth-submit').textContent = mode === 'login' ? 'Sign in' : 'Create account';
+    $('a-password').autocomplete = mode === 'login' ? 'current-password' : 'new-password';
+    $('a-password').minLength = mode === 'login' ? 1 : 8;
+  }
+  qsa('[data-atab]').forEach(function (b) { b.addEventListener('click', function () { setAuthMode(b.dataset.atab); }); });
+  qsa('#a-role button').forEach(function (b) { b.addEventListener('click', function () { qsa('#a-role button').forEach(function (x) { var on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-checked', String(on)); }); }); });
+  $('auth-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var email = $('a-email').value.trim(), password = $('a-password').value;
+    var err = $('auth-error'); err.hidden = true;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err.textContent = 'Enter a valid email address.'; err.hidden = false; return; }
+    var body, url;
+    if (authMode === 'login') {
+      if (!password) { err.textContent = 'Enter your password.'; err.hidden = false; return; }
+      url = URLS.login; body = { email: email, password: password };
+    } else {
+      var name = $('a-name').value.trim(), phone = $('a-phone').value.trim();
+      if (name.length < 2) { err.textContent = 'Enter your name.'; err.hidden = false; return; }
+      if (password.length < 8) { err.textContent = 'Use a password of 8 or more characters.'; err.hidden = false; return; }
+      if (phone && !/^[0-9+\- ]{8,15}$/.test(phone)) { err.textContent = 'Phone: 8 to 15 digits.'; err.hidden = false; return; }
+      url = URLS.register; body = { name: name, email: email, phone: phone || null, password: password, role: qs('#a-role button.on').dataset.role };
+    }
+    $('auth-submit').disabled = true;
+    apiFetch(url, { method: 'POST', json: body })
+      .then(function (r) {
+        setToken(r.token); setAuthUser(r.user);
+        toast(authMode === 'login' ? 'Signed in as ' + r.user.name : 'Welcome, ' + r.user.name, 'ok');
+        var then = afterAuth; closeAuth(); if (then) then();
+      })
+      .catch(function (e) { err.textContent = e.message; err.hidden = false; })
+      .finally(function () { $('auth-submit').disabled = false; });
+  });
+  $('btn-auth').addEventListener('click', function () {
+    if (!authUser) { openAuth('login'); return; }
+    var m = $('account-menu'); m.hidden = !m.hidden; $('btn-auth').setAttribute('aria-expanded', String(!m.hidden));
+  });
+  $('btn-logout').addEventListener('click', function () { setToken(null); setAuthUser(null); toast('Signed out', 'ok'); });
+  qsa('[data-close="auth"]').forEach(function (b) { b.addEventListener('click', closeAuth); });
+  authEl.addEventListener('click', function (e) { if (e.target === authEl) closeAuth(); });
+  if (token()) apiFetch(URLS.me).then(setAuthUser).catch(function () { setAuthUser(null); });
+
+  // ======================= add a PG or hostel =======================
+  var AMENITIES = ['wifi', 'ac', 'laundry', 'parking', 'lift', 'security', 'mess', 'geyser', 'cctv', 'power_backup', 'housekeeping', 'wheelchair'];
+  var AMENITY_LABEL = { power_backup: 'Power backup', ac: 'AC', cctv: 'CCTV', wifi: 'Wi-Fi' };
+  var addEl = $('add'), chosenAmenities = [];
+  $('f-amenities').innerHTML = AMENITIES.map(function (a) { return '<button type="button" class="chip" data-amenity="' + a + '" style="--c: var(--accent)">' + esc(AMENITY_LABEL[a] || nice(a)) + '</button>'; }).join('');
+  $('f-amenities').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-amenity]'); if (!b) return;
+    var a = b.dataset.amenity, i = chosenAmenities.indexOf(a);
+    if (i >= 0) chosenAmenities.splice(i, 1); else chosenAmenities.push(a);
+    b.classList.toggle('on', i < 0);
+  });
+  function openAdd() {
+    if (!authUser) { openAuth('login', openAdd); return; }
+    closeDetail();
+    addEl.hidden = false;
+    $('add-note').textContent = authUser.trusted || authUser.role === 'admin'
+      ? 'It appears on the map right away as Unverified. Once three students confirm it from the spot, it becomes verified.'
+      : 'Because your account is new, an admin checks your first listing before it appears on the map. After that, your listings go live right away.';
+    refreshAddLocation();
+    if (!$('f-address').value && state.loc && state.loc.name && !/pin|location|coordinates/i.test(state.loc.name)) $('f-address').value = state.loc.name;
+    setTimeout(function () { $('f-name').focus(); }, 50);
+  }
+  function closeAdd() { addEl.hidden = true; }
+  function refreshAddLocation() {
+    if (addEl.hidden) return;
+    var chip = $('add-loc');
+    chip.classList.toggle('empty', !state.loc);
+    $('add-loc-name').textContent = state.loc ? (state.loc.name || 'Pin on the map') : 'Tap the map where the place is';
+    $('add-loc-coords').textContent = state.loc ? fmt(state.loc.lat, state.loc.lng) + ' · drag the amber pin to the gate' : 'the amber pin is used as the location';
+  }
+  $('btn-add').addEventListener('click', function () { if (addEl.hidden) openAdd(); else closeAdd(); });
+  qsa('[data-close="add"]').forEach(function (b) { b.addEventListener('click', closeAdd); });
+  $('add-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var err = $('add-error'); err.hidden = true;
+    var fail = function (m) { err.textContent = m; err.hidden = false; };
+    if (!authUser) { openAuth('login', openAdd); return; }
+    if (!state.loc) { fail('Tap the map where the place is, or use your location, so the pin marks it.'); return; }
+    var name = $('f-name').value.trim(), address = $('f-address').value.trim(), rent = Number($('f-rent').value), rentMax = $('f-rent-max').value, deposit = $('f-deposit').value;
+    var phone = $('f-phone').value.trim(), website = $('f-website').value.trim();
+    if (name.length < 3) { fail('Give the place a name of at least 3 characters.'); return; }
+    if (address.length < 5) { fail('Enter the address: lane, locality, Pune.'); return; }
+    if (!rent || rent < 500 || rent > 500000) { fail('Enter the monthly rent in rupees (500 to 5,00,000).'); return; }
+    if (rentMax && Number(rentMax) < rent) { fail('The upper rent must not be below the rent.'); return; }
+    if (phone && !/^[0-9+\- ]{8,15}$/.test(phone)) { fail('Phone: 8 to 15 digits.'); return; }
+    if (website && !/^https?:\/\/[^\s<>"']+$/.test(website)) { fail('Website must start with http:// or https://.'); return; }
+    var files = Array.prototype.slice.call($('f-photos').files || []).filter(function (f) { return /^image\//.test(f.type); }).slice(0, 5);
+    var body = {
+      name: name, address: address, lat: state.loc.lat, lng: state.loc.lng,
+      listing_type: $('f-type').value, gender: $('f-gender').value,
+      rent_min: rent, rent_max: rentMax ? Number(rentMax) : null, deposit: deposit ? Number(deposit) : null,
+      food_included: $('f-food').checked, amenities: chosenAmenities.slice(), contact_phone: phone || null, website: website || null,
+      vacancy: $('f-vacancy').checked
+    };
+    $('add-submit').disabled = true;
+    var t = toast('Publishing…', 'load', { sticky: true });
+    apiFetch(URLS.listings, { method: 'POST', json: body })
+      .then(function (saved) {
+        if (!files.length) return saved;
+        var form = new FormData();
+        files.forEach(function (f) { form.append('files', f); });
+        return apiFetch(URLS.listings + '/' + saved.id + '/photos', { method: 'POST', body: form }).then(function () { return saved; }, function () { toast('Listing saved, but the photos could not be uploaded.', 'err'); return saved; });
+      })
+      .then(function (saved) {
+        t.dismiss(); closeAdd(); $('add-form').reset(); chosenAmenities = []; qsa('#f-amenities .chip').forEach(function (c) { c.classList.remove('on'); });
+        if (saved.status === 'pending') toast('Saved. An admin will check it before it appears on the map.', 'ok', { sticky: false });
+        else { toast(saved.name + ' is live on the map as Unverified.', 'ok'); state.cat = ''; state.sub = ''; renderGroupChips(); scan(true); setTimeout(function () { openDetail(saved.id); }, 1500); }
+      })
+      .catch(function (e) { t.dismiss(); fail(e.message); })
+      .finally(function () { $('add-submit').disabled = false; });
+  });
+
   // ======================= layers panel, legend, collapse =======================
   var layersEl = $('layers');
   function toggleLayers(open) {
@@ -799,7 +974,8 @@
   $('btn-layers').addEventListener('click', function () { toggleLayers(); });
   function renderLayers() {
     $('basemaps').innerHTML = Object.keys(BASEMAPS).map(function (k) {
-      return '<button type="button" data-base="' + k + '" class="' + (activeBase === k ? 'on' : '') + '"><span class="thumb" style="background-image:url(' + BASEMAPS[k].thumb + ')"></span>' + esc(BASEMAPS[k].label) + '</button>';
+      var look = BASEMAPS[k].thumb ? 'background-image:url(' + BASEMAPS[k].thumb + ')' : 'background:' + BASEMAPS[k].swatch;
+      return '<button type="button" data-base="' + k + '" class="' + (activeBase === k ? 'on' : '') + '"><span class="thumb" style="' + look + '"></span>' + esc(BASEMAPS[k].label) + '</button>';
     }).join('');
     $('overlays').innerHTML = OVERLAYS.map(function (o) {
       return '<label class="switch" style="--c:' + (o.color || 'var(--primary)') + '">' + ic(o.icon) + '<span>' + esc(o.label) + '</span><input type="checkbox" data-overlay="' + o.key + '"' + (state.overlays[o.key] ? ' checked' : '') + ' /><span class="tog"></span></label>';
@@ -846,7 +1022,7 @@
 
   document.addEventListener('keydown', function (e) {
     var typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
-    if (e.key === 'Escape') { openHelp(false); toggleLayers(false); openCoords(false); dlMenu.hidden = true; hideSuggest(); closeDetail(); if (!$('tour').hidden) endTour(); map.closePopup(); return; }
+    if (e.key === 'Escape') { openHelp(false); toggleLayers(false); openCoords(false); dlMenu.hidden = true; hideSuggest(); closeDetail(); closeAuth(); closeAdd(); $('account-menu').hidden = true; if (!$('tour').hidden) endTour(); map.closePopup(); return; }
     if (typing) return;
     if (e.key === '/') { e.preventDefault(); q.focus(); }
     else if (e.key === 'Enter') { if (state.loc) scan(true); }

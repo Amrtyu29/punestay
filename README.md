@@ -403,7 +403,9 @@ http://localhost:5173/plain/index.html while the dev server runs, or `dist/plain
 Leaflet, Leaflet.markercluster, Leaflet.heat and Lucide icons from CDNs and the same `/nearby`, `/nearby/categories`
 and `/geocode` API. It adds an intro screen, a first-visit tour, a help modal with shortcuts, address and PIN-code
 search, glass panels with a dark and a light theme, five basemaps, a heatmap and per-category GeoServer WMS overlays
-(CQL filters on the `services` view), CSV and GeoJSON downloads, shareable links such as
+(CQL filters on the `services` view), a **PGs & hostels** category that searches PuneStay's own listings through
+`GET /listings/nearby` (same parameters as `/nearby`, plus `type` and `gender`; `GET /listings/nearby/summary` gives the
+counts), CSV and GeoJSON downloads, shareable links such as
 `plain/index.html?lat=18.52&lng=73.85&category=hospital&radius=1000`, and a bottom sheet on phones. It is the
 version to read when the question is "how does the Nearby Services page work line by line".
 

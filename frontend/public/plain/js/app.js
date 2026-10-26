@@ -29,14 +29,22 @@
     public:     { label: 'Public services', icon: 'shield', color: 'var(--c-public)', cats: ['police', 'fire_station', 'post_office', 'toilets'] },
     commercial: { label: 'Commercial', icon: 'shopping-bag', color: 'var(--c-commercial)', cats: ['atm', 'bank', 'office', 'lodging'] },
     recreation: { label: 'Recreation', icon: 'trees', color: 'var(--c-recreation)', cats: ['park', 'place_of_worship'] },
+    // PuneStay's own listings (the PG finder), searched through /listings/nearby instead of /nearby
+    stay:       { label: 'PGs & hostels', icon: 'bed-double', color: 'var(--c-stay)', cats: ['pg', 'hostel'], listings: true },
     other:      { label: 'Other', icon: 'map-pin', color: 'var(--c-other)', cats: [] }
   };
   var CAT_ICON = {
     hospital: 'hospital', pharmacy: 'pill', mess: 'utensils', grocery: 'shopping-cart', bus_stop: 'bus', metro: 'train-front',
     fuel: 'fuel', school: 'school', college: 'graduation-cap', library: 'book-open', police: 'shield', fire_station: 'flame',
     post_office: 'mail', toilets: 'bath', atm: 'banknote', bank: 'landmark', office: 'building-2', lodging: 'bed-double',
-    park: 'trees', place_of_worship: 'church'
+    park: 'trees', place_of_worship: 'church', pg: 'bed-double', hostel: 'building'
   };
+  var STAY_CATS = [   // shown as service types under "PGs & hostels"; counts filled from /listings/nearby/summary
+    { category: 'pg', label: 'PG', count: 0, subcategories: [] },
+    { category: 'hostel', label: 'Hostel', count: 0, subcategories: [] }
+  ];
+  var STAY_SUBS = [{ subcategory: 'any', label: 'Anyone' }, { subcategory: 'male', label: 'Boys' }, { subcategory: 'female', label: 'Girls' }];
+  function isStay() { return state.group === 'stay'; }
   var CAT_GROUP = {};
   Object.keys(GROUPS).forEach(function (g) { GROUPS[g].cats.forEach(function (c) { CAT_GROUP[c] = g; }); });
   function groupOf(cat) { return CAT_GROUP[cat] || 'other'; }
@@ -161,8 +169,8 @@
   var ring = null, heat = null, userMarker = null, halo = null;
   var markers = {};               // id -> marker
   var wms = {};                   // key -> L.tileLayer.wms
-  function wmsLayer(cql) {
-    var opts = { layers: WS + ':services', format: 'image/png', transparent: true, opacity: 0.8, attribution: 'GeoServer' };
+  function wmsLayer(cql, layerName) {
+    var opts = { layers: WS + ':' + (layerName || 'services'), format: 'image/png', transparent: true, opacity: 0.8, attribution: 'GeoServer' };
     if (cql) opts.CQL_FILTER = cql;
     var l = L.tileLayer.wms(GEOSERVER + '/' + WS + '/wms', opts);
     l.on('tileerror', function () { if (!l._warned) { l._warned = true; toast('GeoServer overlay could not be loaded. Is GeoServer running on port 8080?', 'err'); } });
@@ -176,6 +184,7 @@
   ];
   Object.keys(GROUPS).forEach(function (g) {
     if (g === 'other') return;
+    if (GROUPS[g].listings) { OVERLAYS.push({ key: 'wms_' + g, label: GROUPS[g].label + ' (WMS)', icon: GROUPS[g].icon, color: GROUPS[g].color, on: false, layer: 'listings_public' }); return; }
     OVERLAYS.push({ key: 'wms_' + g, label: GROUPS[g].label + ' (WMS)', icon: GROUPS[g].icon, color: GROUPS[g].color, on: false, cql: "category IN ('" + GROUPS[g].cats.join("','") + "')" });
   });
   function setOverlay(key, on) {
@@ -185,7 +194,7 @@
     else if (key === 'heat') { drawHeat(); }
     else {
       var def = OVERLAYS.filter(function (o) { return o.key === key; })[0];
-      if (on && !wms[key]) { wms[key] = wmsLayer(def.cql).addTo(map); }
+      if (on && !wms[key]) { wms[key] = wmsLayer(def.cql, def.layer).addTo(map); }
       else if (!on && wms[key]) { map.removeLayer(wms[key]); delete wms[key]; }
     }
   }
@@ -353,6 +362,7 @@
   function renderGroupChips() {
     var present = {};
     categories.forEach(function (c) { present[groupOf(c.category)] = (present[groupOf(c.category)] || 0) + c.count; });
+    present.stay = STAY_CATS.reduce(function (s, c) { return s + c.count; }, 0) || present.stay;
     var h = '<button type="button" class="chip' + (state.group ? '' : ' on') + '" data-group="" style="--c: var(--primary)">' + ic('layers') + ' All</button>';
     Object.keys(GROUPS).forEach(function (g) {
       if (!present[g]) return;
@@ -364,7 +374,7 @@
   function renderTypeChips() {
     var step = $('type-step');
     if (!state.group) { step.hidden = true; return; }
-    var cats = categories.filter(function (c) { return groupOf(c.category) === state.group; });
+    var cats = isStay() ? STAY_CATS : categories.filter(function (c) { return groupOf(c.category) === state.group; });
     var h = '<button type="button" class="chip' + (state.cat ? '' : ' on') + '" data-cat="" style="--c:' + GROUPS[state.group].color + '">' + ic('asterisk') + ' Any ' + esc(GROUPS[state.group].label.toLowerCase()) + '</button>';
     cats.forEach(function (c) {
       h += '<button type="button" class="chip' + (state.cat === c.category ? ' on' : '') + '" data-cat="' + c.category + '" style="--c:' + colorOf(c.category) + '">' + ic(iconOf(c.category)) + ' ' + esc(c.label) + ' <small>' + c.count + '</small></button>';
@@ -378,8 +388,9 @@
     var sel = $('subcategory'), wrap = $('sub-wrap');
     var cat = categories.filter(function (c) { return c.category === state.cat; })[0];
     sel.innerHTML = '<option value="">Any</option>';
-    var subs = cat ? cat.subcategories : [];
-    subs.forEach(function (s) { var o = document.createElement('option'); o.value = s.subcategory; o.textContent = nice(s.subcategory) + ' (' + s.count + ')'; sel.appendChild(o); });
+    var subs = isStay() ? STAY_SUBS.slice(1) : (cat ? cat.subcategories : []);
+    wrap.firstChild.textContent = isStay() ? 'For ' : 'Narrow further ';
+    subs.forEach(function (s) { var o = document.createElement('option'); o.value = s.subcategory; o.textContent = s.label || (nice(s.subcategory) + ' (' + s.count + ')'); sel.appendChild(o); });
     sel.value = state.sub && subs.some(function (s) { return s.subcategory === state.sub; }) ? state.sub : '';
     state.sub = sel.value;
     wrap.hidden = subs.length <= 1;
@@ -432,13 +443,19 @@
   $('btn-scan').addEventListener('click', function () { scan(true); });
   function queryParams() {
     var p = new URLSearchParams({ lat: state.loc.lat, lng: state.loc.lng });
-    if (state.cat) p.set('category', state.cat);
-    else if (state.group) p.set('category', GROUPS[state.group].cats.filter(function (c) { return categories.some(function (k) { return k.category === c; }); }).join(','));
-    if (state.sub) p.set('subcategory', state.sub);
+    if (isStay()) {
+      if (state.cat) p.set('type', state.cat);
+      if (state.sub) p.set('gender', state.sub);
+    } else {
+      if (state.cat) p.set('category', state.cat);
+      else if (state.group) p.set('category', GROUPS[state.group].cats.filter(function (c) { return categories.some(function (k) { return k.category === c; }); }).join(','));
+      if (state.sub) p.set('subcategory', state.sub);
+    }
     if (state.mode === 'radius') { p.set('radius_m', radiusM()); p.set('limit', state.n); }
     else { p.set('limit', state.n); }
     return p;
   }
+  function endpoint() { return isStay() ? '/listings/nearby' : '/nearby'; }
   function scan(animate) {
     if (!state.loc) { toast('Set a location first: tap the map, use your location or search.', 'err'); return; }
     hasScanned = true;
@@ -448,11 +465,12 @@
     showState('loading');
     if (animate) scanAnimation();
     var t = toast('Scanning ' + (state.mode === 'radius' ? 'within ' + metres(radiusM()) : 'for the nearest ' + state.n) + '…', 'load', { sticky: true });
-    fetch(API + '/nearby?' + queryParams().toString(), { signal: scanAbort.signal })
+    fetch(API + endpoint() + '?' + queryParams().toString(), { signal: scanAbort.signal })
       .then(function (r) { return r.json().then(function (b) { if (!r.ok) throw new Error(b.detail || 'The API answered ' + r.status); return b; }); })
       .then(function (fc) {
         clearTimeout(timeout); t.dismiss();
         state.results = fc.features || [];
+        if (isStay()) state.results.forEach(function (f) { f.properties.listing = true; f.properties.link = '../#/listing/' + f.properties.id; });
         state.activeId = null;
         $('api-banner').hidden = true;
         render();
@@ -537,14 +555,16 @@
         '<span class="res-main"><b>' + esc(p.name || 'Unnamed ' + nice(p.subcategory)) + '</b><small>' + esc(nice(p.subcategory)) + ' · ' + esc(p.label) + '</small></span>' +
         '<span class="res-dist">' + metres(p.distance_m) + '</span></div>' +
         '<div class="res-bar"><i data-w="' + Math.max(4, Math.round(100 * p.distance_m / maxD)) + '"></i></div>' +
+        (p.listing ? '<div class="res-rent">' + (p.rent_min != null ? '₹' + Number(p.rent_min).toLocaleString('en-IN') + ' <small>/ month</small>' : 'Rent not published') + (p.gender && p.gender !== 'any' ? ' <small>· ' + (p.gender === 'male' ? 'boys' : 'girls') + ' only</small>' : '') + (p.status === 'verified' ? ' <small>· verified</small>' : '') + '</div>' : '') +
         (p.address ? '<div class="res-addr">' + ic('map-pin') + '<span>' + esc(p.address) + '</span></div>' : '') +
         '<button class="res-more" type="button" aria-label="More details" aria-expanded="false">' + ic('chevron-down') + '</button>' +
         '<div class="res-detail"><dl>' +
+          (p.listing ? '<dt>Listing</dt><dd><a href="' + esc(p.link) + '" target="_blank" rel="noopener">Open in PuneStay ↗</a></dd>' : '') +
           (p.phone ? '<dt>Phone</dt><dd><a href="tel:' + esc(p.phone) + '">' + esc(p.phone) + '</a></dd>' : '') +
           (p.website ? '<dt>Website</dt><dd><a href="' + esc(p.website) + '" target="_blank" rel="noopener">' + esc(p.website.replace(/^https?:\/\//, '')) + '</a></dd>' : '') +
           (p.opening_hours ? '<dt>Hours</dt><dd>' + esc(p.opening_hours) + '</dd>' : '') +
           '<dt>Bearing</dt><dd>' + (p.bearing_deg != null ? p.bearing_deg + '°' : '—') + '</dd>' +
-          '<dt>Source</dt><dd>OpenStreetMap</dd>' +
+          '<dt>Source</dt><dd>' + esc(p.source_label || 'OpenStreetMap') + '</dd>' +
           '<dt>Coords</dt><dd class="mono">' + fmt(lat_(f), lng_(f)) + '</dd></dl>' +
           '<div class="pop-actions"><a class="primary" href="' + directionsUrl(f) + '" target="_blank" rel="noopener">' + ic('navigation') + ' Directions ↗</a>' +
           '<button type="button" data-copy="' + fmt(lat_(f), lng_(f)) + '">' + ic('copy') + ' Copy coordinates</button></div></div>';
@@ -574,8 +594,9 @@
   }
   function popupHtml(p, f) {
     return '<div class="pop-head"><span class="tile" style="--c:' + colorOf(p.category) + '">' + ic(iconOf(p.category)) + '</span><span><b>' + esc(p.name || 'Unnamed ' + nice(p.subcategory)) + '</b><small>' + esc(nice(p.subcategory)) + ' · ' + esc(p.label) + '</small></span></div>' +
-      '<div><span class="pop-dist">' + metres(p.distance_m) + '</span> from your pin' + (p.address ? '<br>' + esc(p.address) : '') + '</div>' +
+      '<div><span class="pop-dist">' + metres(p.distance_m) + '</span> from your pin' + (p.listing ? '<br>' + (p.rent_min != null ? '₹' + Number(p.rent_min).toLocaleString('en-IN') + ' / month' : 'Rent not published') : '') + (p.address ? '<br>' + esc(p.address) : '') + '</div>' +
       '<div class="pop-actions"><a class="primary" href="' + directionsUrl(f) + '" target="_blank" rel="noopener">' + ic('navigation') + ' Directions</a>' +
+      (p.listing ? '<a href="' + esc(p.link) + '" target="_blank" rel="noopener">' + ic('external-link') + ' PuneStay</a>' : '') +
       (p.phone ? '<a href="tel:' + esc(p.phone) + '">' + ic('phone') + ' Call</a>' : '') +
       (p.website ? '<a href="' + esc(p.website) + '" target="_blank" rel="noopener">' + ic('globe') + ' Website</a>' : '') + '</div>';
   }
@@ -665,6 +686,7 @@
   function renderLegend() {
     var present = {};
     categories.forEach(function (c) { present[groupOf(c.category)] = true; });
+    present.stay = true;
     $('legend-body').innerHTML = Object.keys(GROUPS).filter(function (g) { return present[g]; }).map(function (g) {
       return '<span style="--c:' + GROUPS[g].color + '"><i></i>' + ic(GROUPS[g].icon) + esc(GROUPS[g].label) + '</span>';
     }).join('') + '<span class="you"><i></i>' + ic('locate-fixed') + 'You are here</span>';
@@ -834,11 +856,17 @@
         if (state.cat && !list.some(function (c) { return c.category === state.cat; })) { state.cat = ''; }
         renderGroupChips(); renderTypeChips(); renderLegend();
         $('api-banner').hidden = true;
+        return fetch(API + '/listings/nearby/summary').then(function (r) { return r.ok ? r.json() : null; }).then(function (s) {
+          if (!s) return;
+          STAY_CATS[0].count = s.pg || 0; STAY_CATS[1].count = s.hostel || 0;
+          renderGroupChips(); renderTypeChips();
+        }).catch(function () { /* the PG group simply shows without counts */ });
       })
       .catch(function () { $('api-banner').hidden = false; icons(); });
   }
 
   document.body.classList.add('introing');
+  if (window.innerHeight < 720) { $('legend').classList.add('closed'); qs('.legend-head').setAttribute('aria-expanded', 'false'); }
   applyTheme(storedTheme() || (themeMedia.matches ? 'dark' : 'light'), false);
   try { var sb = localStorage.getItem(STORE.base); if (sb && BASEMAPS[sb]) setBasemap(sb, true); } catch (e) { /* ignore */ }
   pendingLoc = readUrl();

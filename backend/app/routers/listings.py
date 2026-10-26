@@ -2,9 +2,9 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from ..config import MAX_LISTINGS_PER_REQUEST
+from ..config import MAX_LISTINGS_PER_REQUEST, PUNE_BBOX
 from ..db import get_cursor
-from ..geo import collection, parse_bbox
+from ..geo import collection, in_pune, parse_bbox
 from ..services.nearby import nearby
 from ..services.osrm import fill_commutes
 
@@ -91,6 +91,77 @@ def list_listings(
 
     fc = collection(rows)
     fc["count"] = len(rows)
+    return fc
+
+
+SOURCE_LABEL = {"osm": "OpenStreetMap", "overture": "Overture Maps", "user": "Added on PuneStay", "import": "Imported"}
+
+
+@router.get("/nearby/summary", summary="How many public listings exist, by type (for the Sonar page chips)")
+def nearby_summary(cur=Depends(get_cursor)):
+    cur.execute("SELECT listing_type, count(*)::int AS n FROM listings_public GROUP BY listing_type")
+    out = {"total": 0}
+    for r in cur.fetchall():
+        out[r["listing_type"]] = r["n"]
+        out["total"] += r["n"]
+    return out
+
+
+@router.get("/nearby", summary="PGs and hostels around a point, sorted by distance (same contract as GET /nearby)")
+def listings_nearby(
+    cur=Depends(get_cursor),
+    lat: float | None = Query(None, description="origin latitude (WGS84)"),
+    lng: float | None = Query(None, description="origin longitude (WGS84)"),
+    type: Literal["pg", "hostel", "flat"] | None = Query(None, alias="type"),
+    gender: Literal["male", "female", "any"] | None = Query(None, description="male / female: that gender or 'any'"),
+    radius_m: int | None = Query(None, ge=50, le=25000),
+    limit: int | None = Query(None, ge=1, le=200),
+):
+    if lat is None or lng is None:
+        raise HTTPException(400, "Give a location: lat and lng (click the map, type coordinates, or use your location).")
+    if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+        raise HTTPException(400, "Latitude must be between -90 and 90 and longitude between -180 and 180.")
+    if not in_pune(lat, lng):
+        b = PUNE_BBOX
+        raise HTTPException(400, f"That point is outside the Pune area covered by this app "
+                                 f"(lat {b['south']}–{b['north']}, lng {b['west']}–{b['east']}).")
+    if radius_m is None and limit is None:
+        radius_m, limit = 2000, 20
+    where, params = ["true"], {"lat": lat, "lng": lng, "limit": limit or 200}
+    if type:
+        where.append("l.listing_type = %(type)s")
+        params["type"] = type
+    if gender and gender != "any":
+        where.append("l.gender IN ('any', %(gender)s)")
+        params["gender"] = gender
+    if radius_m is not None:
+        where.append("ST_DWithin(l.geom::geography, o.g::geography, %(radius)s)")
+        params["radius"] = radius_m
+    cur.execute(
+        f"""SELECT l.id, l.name, l.address, l.listing_type AS category, l.listing_type AS subcategory, l.gender,
+                   l.rent_min, l.rent_max, l.vacancy, l.status, l.source, l.website, b.contact_phone AS phone,
+                   l.safety_score, l.food_included,
+                   ST_Distance(l.geom::geography, o.g::geography)::int AS distance_m,
+                   degrees(ST_Azimuth(o.g, l.geom))::int AS bearing_deg,
+                   ST_Y(l.geom) AS lat, ST_X(l.geom) AS lng
+            FROM (SELECT ST_SetSRID(ST_MakePoint(%(lng)s, %(lat)s), 4326) AS g) o,
+                 listings_public l JOIN listings b ON b.id = l.id   -- the phone lives on the base table
+            WHERE {' AND '.join(where)}
+            ORDER BY l.geom <-> o.g
+            LIMIT %(limit)s""",
+        params,
+    )
+    rows = cur.fetchall()
+    for r in rows:
+        r["label"] = "PGs & hostels"
+        r["source_label"] = SOURCE_LABEL.get(r["source"], r["source"])
+    fc = collection(rows)
+    fc["count"] = len(rows)
+    fc["origin"] = {"lat": lat, "lng": lng}
+    fc["query"] = {"type": type, "gender": gender, "radius_m": radius_m, "limit": limit}
+    if not rows:
+        fc["message"] = (f"No {type + 's' if type else 'PGs or hostels'} found{f' within {radius_m} m' if radius_m else ''}. "
+                         "Try a larger radius, or add the place if you know one.")
     return fc
 
 

@@ -94,7 +94,7 @@ def list_listings(
 SOURCE_LABEL = {"osm": "OpenStreetMap", "overture": "Overture Maps", "user": "Added on PuneStay", "import": "Imported"}
 
 
-@router.get("/nearby/summary", summary="How many public listings exist, by type (for the Sonar page chips)")
+@router.get("/nearby/summary", summary="How many public listings exist, by type (for the home page chips)")
 def nearby_summary(cur=Depends(get_cursor)):
     cur.execute("SELECT listing_type, count(*)::int AS n FROM listings_public GROUP BY listing_type")
     out = {"total": 0}

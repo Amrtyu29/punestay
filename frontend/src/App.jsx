@@ -85,7 +85,7 @@ function MapNav() {
   return (
     <nav className="map-nav" aria-label="Pages">
       <a className="on" href={href('/')}><Map size={15} /> Map</a>
-      <a href="/" title="PuneStay Sonar: the Nearby Services page"><Search size={15} /> Nearby services</a>
+      <a href="/" title="PuneStay home page: PGs and hostels near you"><Search size={15} /> Nearby services</a>
       <a href={href('/compare')}><ChartColumn size={15} /> Compare areas</a>
       <a href={href('/saved')}><Bookmark size={15} /> Saved</a>
     </nav>

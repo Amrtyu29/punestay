@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>PuneStay Sonar · Nearby Services WebGIS</title>
+  <title>PuneStay · PGs and hostels near you</title>
   <meta name="description" content="Ping the city: find the PGs and hostels nearest to any point in Pune, from PostGIS, drawn with Leaflet." />
   <meta name="theme-color" content="#070b16" />
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
@@ -46,9 +46,9 @@
 
   <!-- ================= header pill ================= -->
   <header class="hdr glass" id="hdr">
-    <a class="logo" href="/" title="PuneStay Sonar">
+    <a class="logo" href="/" title="PuneStay">
       <span class="radar small" aria-hidden="true"><span></span><span></span><i></i></span>
-      <span class="logo-text"><b>PuneStay <em>Sonar</em></b><small>Ping the city.</small></span>
+      <span class="logo-text"><b>Pune<em>Stay</em></b><small>Ping the city.</small></span>
     </a>
     <div class="hdr-actions">
       <button id="btn-add" class="btn primary sm" type="button" title="Add a PG or hostel to the map"><i data-lucide="plus"></i> Add a PG</button>
@@ -195,7 +195,7 @@
     </div>
   </aside>
 
-  <!-- ================= PG / hostel detail panel (stays inside Sonar) ================= -->
+  <!-- ================= PG / hostel detail panel (stays on this page) ================= -->
   <aside id="detail" class="card glass detail" hidden aria-label="Place details" role="dialog">
     <button class="icon-btn sm detail-close" type="button" aria-label="Close details" data-close="detail"><i data-lucide="x"></i></button>
     <div id="detail-body" class="detail-body"></div>
@@ -259,7 +259,7 @@
     </form>
   </div>
 
-  <!-- ================= add a PG / hostel (stays inside Sonar) ================= -->
+  <!-- ================= add a PG / hostel (stays on this page) ================= -->
   <aside id="add" class="card glass add" hidden aria-label="Add a PG or hostel" role="dialog">
     <div class="card-head">
       <h2><i data-lucide="plus"></i> Add a PG or hostel</h2>

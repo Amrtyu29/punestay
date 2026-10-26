@@ -29,7 +29,7 @@ npm run dev --prefix frontend
 powershell -ExecutionPolicy Bypass -File scripts\geoserver_start.ps1
 ```
 
-Then open http://localhost:5173 (PuneStay Sonar, the course-brief Nearby Services page) and http://localhost:5173/app/
+Then open http://localhost:5173 (the PuneStay home page, the course-brief Nearby Services page) and http://localhost:5173/app/
 (the PuneStay map app with listings, directions, compare, admin). Admin account for the local database: `admin@punestay.in`
 with password `admin-password-123` (created by the smoke test; change it before any deployment).
 Admin registration needs both `ADMIN_EMAIL` and `ADMIN_SETUP_TOKEN` in `.env`, and the token must be
@@ -388,7 +388,7 @@ python backend\tests\smoke_api.py
 
 ## Nearby Services (course brief, Project 1)
 
-The brief's required system is **PuneStay Sonar**, the home page at http://localhost:5173, written in plain HTML,
+The brief's required system is the **PuneStay home page** at http://localhost:5173, written in plain HTML,
 CSS and JavaScript with no framework and no build step: `frontend/index.html`, `frontend/public/css/style.css` and
 `frontend/public/js/app.js`. It uses Leaflet, Leaflet.markercluster, Leaflet.heat and Lucide icons from CDNs and
 the `/listings/nearby`, `/listings/nearby/summary`, `/listings/{id}` and `/geocode` API. The service it finds is
@@ -400,7 +400,7 @@ hospital, pharmacy, ATM, grocery and police station, CSV and GeoJSON downloads, 
 `/?lat=18.52&lng=73.85&type=hostel&gender=female&radius=2000`, and a bottom sheet on phones. The generic
 22-category services search remains available in the app's **Nearby** sidebar tab and through `GET /nearby`.
 
-Maps and geocoding in Sonar follow the providers' usage rules. Basemaps (all free, no key): OpenStreetMap, Humanitarian
+Maps and geocoding on the home page follow the providers' usage rules. Basemaps (all free, no key): OpenStreetMap, Humanitarian
 OSM, Esri light and dark gray canvases, OpenTopoMap and Esri World Imagery, each with its own attribution; the dark or
 light one follows the theme until a choice is saved. As-you-type suggestions come only from our own database (colleges,
 offices and localities through `/destinations` and `/areas`), because Nominatim forbids autocomplete; Nominatim is used
@@ -416,9 +416,9 @@ adding and claiming listings with the trust rules, and the admin pages. Its home
 tab that reuses the same `/nearby` query (`frontend/src/nearby.js`).
 
 Both front ends ship in a Dark Charcoal + Teal theme by default, with a light theme behind the sun/moon button
-(`frontend/src/theme.js` in the app; CSS variables in Sonar). Sonar follows the system theme until you choose.
+(`frontend/src/theme.js` in the app; CSS variables on the home page). The home page follows the system theme until you choose.
 
-Both front ends offer Google-Maps-style map types (`frontend/src/basemaps.js` in the app, the Layers panel in Sonar):
+Both front ends offer Google-Maps-style map types (`frontend/src/basemaps.js` in the app, the Layers panel on the home page):
 Streets, Light and Dark, Esri World Imagery with a labels overlay for Satellite, OpenTopoMap for Terrain, and plain
 OSM. The app's home map also has a **Directions** tool in the header: from a college / office (or the phone's location) to the selected
 PG by car, bike or foot, using the same OSRM route endpoint, with a link to open the trip in Google Maps.
@@ -426,8 +426,8 @@ PG by car, bike or foot, using the same OSRM route endpoint, with a link to open
 | Brief requirement | Where |
 |---|---|
 | Location by map click, lat/lng, browser geolocation | `frontend/public/js/app.js` (map click and drag, coordinates popover with per-field validation, "Use my location" with denied / unavailable / timeout / insecure-context messages, address and PIN search) |
-| Category and subcategory filtering | Sonar: category PG / hostel (`type`) and subcategory anyone / boys / girls (`gender`) on `GET /listings/nearby`; the app's Nearby tab: `GET /nearby/categories` lists 20 service categories with OSM subcategories |
-| Radius and/or nearest-N | `GET /listings/nearby?radius_m=&limit=` (same contract as `GET /nearby`); Sonar offers "Within a radius" (slider with a live ring) and "Nearest N" (dashed ring to the farthest result) |
+| Category and subcategory filtering | Home page: category PG / hostel (`type`) and subcategory anyone / boys / girls (`gender`) on `GET /listings/nearby`; the app's Nearby tab: `GET /nearby/categories` lists 20 service categories with OSM subcategories |
+| Radius and/or nearest-N | `GET /listings/nearby?radius_m=&limit=` (same contract as `GET /nearby`); the home page offers "Within a radius" (slider with a live ring) and "Nearest N" (dashed ring to the farthest result) |
 | Distance-sorted list synced with markers | list rows and Leaflet markers highlight each other; popups show details |
 | PostGIS query with proper CRS | points stored in EPSG:4326, distances with the `geography` type (metres on the WGS84 ellipsoid), KNN ordering on the GIST index |
 | GeoServer layers | workspace `punestay`: `services`, `pois`, `listings_public`, `destinations`, `safety_reports`, `wards` (WMS + WFS); switchable WMS overlays on the page |

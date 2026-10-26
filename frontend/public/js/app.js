@@ -1,5 +1,5 @@
 /*
- * PuneStay Sonar · Nearby Services WebGIS in plain JavaScript (Leaflet, no framework, no build step).
+ * PuneStay home page · Nearby Services WebGIS in plain JavaScript (Leaflet, no framework, no build step).
  *
  * Course brief (Nearby Services WebGIS) applied to one service: PGs and hostels. Location by map click /
  * coordinates / geolocation (+ address and PIN search), category (PG or hostel) and subcategory (anyone, boys,
@@ -47,7 +47,7 @@
   var SAMPLE = { lat: 18.5308, lng: 73.8575, name: 'Sample spot: Shivajinagar' };
   var BBOX = { south: 18.40, west: 73.62, north: 18.75, east: 74.05 };   // same as PUNE_BBOX in .env
   var RADII = [500, 1000, 2000, 5000, 10000];
-  var STORE = { theme: 'punestay.sonar.theme', toured: 'punestay.sonar.toured', base: 'punestay.sonar.basemap' };
+  var STORE = { theme: 'punestay.home.theme', toured: 'punestay.home.toured', base: 'punestay.home.basemap' };
   var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // One mapping drives chips, markers, popups, cards and the legend. The "category" is the kind of place
@@ -739,7 +739,7 @@
     setTimeout(function () { d.remove(); }, 3000);
   }
 
-  // ======================= PG / hostel details inside Sonar =======================
+  // ======================= PG / hostel details on this page =======================
   var detailEl = $('detail'), detailBody = $('detail-body'), detailAbort = null;
   var TYPE_LABEL = { pg: 'PG', hostel: 'Hostel', flat: 'Flat' };
   var GENDER_LABEL = { any: 'Anyone', male: 'Boys only', female: 'Girls only' };

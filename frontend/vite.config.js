@@ -12,8 +12,8 @@ const apiProxy = {
 
 export default defineConfig({
   plugins: [react()],
-  // Two pages: PuneStay Sonar (plain HTML/CSS/JS) at /, the React app at /app/.
-  build: { rollupOptions: { input: { sonar: 'index.html', app: 'app/index.html' } } },
+  // Two pages: the PuneStay home page (plain HTML/CSS/JS) at /, the React app at /app/.
+  build: { rollupOptions: { input: { home: 'index.html', app: 'app/index.html' } } },
   server: { port: 5173, proxy: apiProxy },
   // `npm run preview` serves the built dist with the same /api proxy (http://localhost:4173).
   preview: { port: 4173, proxy: apiProxy },

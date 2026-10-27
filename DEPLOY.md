@@ -14,27 +14,33 @@ with PostGIS). Both services have free plans with no card required.
 
 Everything below is done once. After that, every `git push` to `main` redeploys the site automatically.
 
-## 1. Create the database on Neon
+## 1. The database on Neon (done on 2026-10-28)
 
-1. Sign up at https://neon.tech (GitHub login works) and create a project named `punestay`. Pick the Singapore
-   region (closest to India) and PostgreSQL 16.
-2. On the project dashboard click **Connect** and copy the connection string. It looks like
-   `postgresql://neondb_owner:password@ep-xxxx.ap-southeast-1.aws.neon.tech/neondb?sslmode=require`.
-   Keep it private: it contains the password.
-
-## 2. Copy the local data to Neon
-
-The local database must be running (`scripts\pg_start.ps1`). Then, in PowerShell in the project folder, paste
-your connection string in place of the placeholder:
+The Neon project `odd-fog-82975793` (Singapore, PostgreSQL 18, PostGIS 3.6) holds the data. It was set up with
+the Neon CLI, which linked this folder to the project (`.neon`, `neon.ts`) and wrote three variables into `.env`:
+`DATABASE_URL` (pooled, for the app), `DATABASE_URL_UNPOOLED` (direct, for dumps and restores) and
+`NEON_BRANCH`. `.env` is not committed. To redo the link on another machine:
 
 ```bash
-powershell -ExecutionPolicy Bypass -File scripts\migrate_to_cloud.ps1 -Url "postgresql://USER:PASSWORD@HOST/neondb?sslmode=require"
+npm i -g neon@latest ; neon login ; neon init -y --org-id org-sweet-cell-31632046 --project-id odd-fog-82975793 --branch production --services postgres ; neon deploy
+```
+
+With `DATABASE_URL` present the API uses Neon even on the laptop. Remove or comment out that line in `.env` to
+go back to the portable PostgreSQL on port 5433.
+
+## 2. Copy the local data to Neon (done, repeat whenever the laptop data changes)
+
+The local database must be running (`scripts\pg_start.ps1`). Use the **unpooled** URL from `.env`:
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts\migrate_to_cloud.ps1 -Url "<DATABASE_URL_UNPOOLED from .env>"
 ```
 
 The script dumps the local database, creates the PostGIS and pg_trgm extensions on Neon, restores everything
 (listings, POIs, destinations, rent observations, users, the `listings_public` view) and prints the row counts on
 both sides. They must match. Your local accounts, including the admin account, are copied with their passwords,
-so the same sign-in works online.
+so the same sign-in works online. Note that it replaces the Neon tables, so listings added online since the last
+copy are lost: once the site is live, treat Neon as the main database.
 
 ## 3. Deploy on Render
 
@@ -42,7 +48,7 @@ so the same sign-in works online.
 2. Click **New > Blueprint**, choose the repository. Render reads `render.yaml` and shows one web service named
    `punestay` on the free plan.
 3. It asks for the two values that are not in the file:
-   - `DATABASE_URL`: the Neon connection string from step 1.
+   - `DATABASE_URL`: the pooled Neon connection string, the `DATABASE_URL` line of `.env` (without the quotes).
    - `ADMIN_EMAIL`: the email of the admin account (the one you registered locally; it was copied in step 2).
 4. Click **Apply**. The first build takes 5 to 10 minutes (it installs the front-end packages, builds the pages,
    installs Python). When the log shows `Application startup complete` the site is at

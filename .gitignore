@@ -19,3 +19,5 @@ data/overture/*.parquet
 
 # office temp files
 ~$*
+.neon
+node_modules/

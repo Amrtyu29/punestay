@@ -21,7 +21,8 @@ if ($LASTEXITCODE -ne 0) { throw "pg_dump failed" }
 
 Write-Host "2/4 Creating the PostGIS and pg_trgm extensions on the target"
 Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
-& "$bin\psql.exe" "$Url" -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+# Options must come before the URL: psql on Windows ignores options that follow the database argument.
+& "$bin\psql.exe" -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS pg_trgm;" "$Url"
 if ($LASTEXITCODE -ne 0) { throw "could not create the extensions; check the connection string and that the provider supports PostGIS" }
 
 Write-Host "3/4 Restoring (existing PuneStay tables on the target are replaced)"
@@ -33,5 +34,5 @@ $counts = "SELECT 'listings' AS t, count(*) FROM listings UNION ALL SELECT 'pois
 $env:PGPASSWORD = "punestay"
 & "$bin\psql.exe" -h localhost -p $LocalPort -U punestay -d punestay -At -c $counts
 Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
-& "$bin\psql.exe" "$Url" -At -c $counts
+& "$bin\psql.exe" -At -c $counts "$Url"
 Write-Host "Done. Put the same connection string into DATABASE_URL on Render."

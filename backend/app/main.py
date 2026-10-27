@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .config import CORS_ORIGINS, FRONTEND_DIST, OSRM_URL, PUNE_BBOX, UPLOAD_DIR
+from .config import CORS_ORIGINS, DB_CONNINFO, FRONTEND_DIST, OSRM_URL, PUNE_BBOX, UPLOAD_DIR
 from .db import close_pool, db_ok
 from .routers import admin, areas, auth, destinations, listings, listings_write, nearby, pois, rents, route, safety
 
@@ -20,12 +20,25 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 logging.getLogger("psycopg.pool").setLevel(logging.ERROR)
 
 
+def _db_target() -> str:
+    """The database host and name without the password, for the startup log."""
+    info = DB_CONNINFO.strip()
+    if info.startswith(("postgresql://", "postgres://")):
+        rest = info.split("://", 1)[1]
+        user_host = rest.split("@")[-1]
+        return user_host.split("?")[0] or "?"
+    parts = dict(p.split("=", 1) for p in info.split() if "=" in p)
+    return f"{parts.get('host', '?')}:{parts.get('port', '?')}/{parts.get('dbname', '?')}"
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    log = logging.getLogger("punestay")
+    log.info("Database target: %s", _db_target())
     if not db_ok():
-        logging.getLogger("punestay").warning(
+        log.warning(
             "Database not reachable at startup. Endpoints return 503 until it is. "
-            "Start it with: docker compose up -d db"
+            "Locally: scripts\\pg_start.ps1 (or docker compose up -d db); online: check DATABASE_URL."
         )
     yield
     close_pool()

@@ -21,7 +21,8 @@ def _env(name: str, default: str) -> str:
 
 
 # Hosted databases (Neon, Supabase, Render) hand out one URL; locally the POSTGRES_* parts are used.
-DB_CONNINFO = os.getenv("DATABASE_URL") or (
+# The URL is often pasted from a .env line, quotes included, so surrounding quotes are dropped.
+DB_CONNINFO = os.getenv("DATABASE_URL", "").strip().strip("\"'") or (
     f"host={_env('POSTGRES_HOST', 'localhost')} "
     f"port={_env('POSTGRES_PORT', '5432')} "
     f"user={_env('POSTGRES_USER', 'punestay')} "

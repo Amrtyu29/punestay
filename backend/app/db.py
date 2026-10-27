@@ -34,10 +34,13 @@ def get_cursor() -> Iterator[psycopg.Cursor]:
 
 
 def db_ok() -> bool:
+    """Quick liveness probe for /health and startup: answers within ~3 s so hosting health checks never stall."""
     try:
         open_pool()
-        with pool.connection() as conn:
+        with pool.connection(timeout=3) as conn:
             conn.execute("SELECT 1")
         return True
     except (PoolTimeout, psycopg.OperationalError):
+        return False
+    except Exception:  # noqa: BLE001 - a health probe must never raise
         return False

@@ -12,10 +12,10 @@
   'use strict';
 
   // ======================= configuration =======================
-  // Every URL the page talks to lives here. The Vite dev server (5173) and `npm run preview` (4173) proxy /api
-  // to FastAPI; any other origin (file://, python -m http.server, ...) calls the API directly, which needs its
-  // origin in CORS_ORIGINS in .env.
-  var API = /^(5173|4173)$/.test(location.port) ? '/api' : 'http://localhost:8000';
+  // Every URL the page talks to lives here. The page always calls /api on its own origin: the Vite dev server
+  // and `npm run preview` proxy it to FastAPI, and online FastAPI serves the page itself and strips the prefix.
+  // Opened straight from disk (file://), it calls the local API, whose CORS_ORIGINS must then allow it.
+  var API = location.protocol === 'file:' ? 'http://localhost:8000/api' : '/api';
   var URLS = {
     health: API + '/health',
     nearby: API + '/listings/nearby',                  // PostGIS radius / nearest-N search (metres on the geography type)
@@ -29,7 +29,9 @@
     listings: API + '/listings'                        // POST creates a listing; POST /listings/{id}/photos adds photos
   };
   var TOKEN_KEY = 'punestay.token';                    // same key as the React app, so one sign-in works in both
-  var GEOSERVER = 'http://localhost:8080/geoserver';
+  // GeoServer runs locally during development; online, set window.PUNESTAY_GEOSERVER in index.html (or pass
+  // ?geoserver=https://... ) to point the WMS overlays at a hosted instance. Without one the overlays just warn.
+  var GEOSERVER = (new URLSearchParams(location.search).get('geoserver') || window.PUNESTAY_GEOSERVER || 'http://localhost:8080/geoserver').replace(/\/$/, '');
   var WS = 'punestay';
   var WMS_URL = GEOSERVER + '/' + WS + '/wms';
   var TILES = {   // all free, no key; attribution is shown for whichever is active

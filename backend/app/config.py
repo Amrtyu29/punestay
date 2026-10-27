@@ -20,13 +20,18 @@ def _env(name: str, default: str) -> str:
     return value if value is not None else default
 
 
-DB_CONNINFO = (
+# Hosted databases (Neon, Supabase, Render) hand out one URL; locally the POSTGRES_* parts are used.
+DB_CONNINFO = os.getenv("DATABASE_URL") or (
     f"host={_env('POSTGRES_HOST', 'localhost')} "
     f"port={_env('POSTGRES_PORT', '5432')} "
     f"user={_env('POSTGRES_USER', 'punestay')} "
     f"password={_env('POSTGRES_PASSWORD', 'punestay')} "
     f"dbname={_env('POSTGRES_DB', 'punestay')}"
 )
+
+# Built front end (home page at /, React app at /app/) served by the API when the folder exists,
+# which is how the Docker image and the Render deployment work. Vite serves it in development instead.
+FRONTEND_DIST = Path(_env("FRONTEND_DIST", str(ROOT / "frontend" / "dist")))
 
 OSRM_URL = _env("OSRM_URL", "http://localhost:5000").rstrip("/")
 # Public demo router used when the local one is not running. Demo/testing use only.

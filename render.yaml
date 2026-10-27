@@ -1,0 +1,29 @@
+# Render blueprint: New > Blueprint > pick this repository. One free web service runs the API and the pages.
+# You will be asked for the values marked sync: false (DATABASE_URL from Neon, ADMIN_EMAIL). See DEPLOY.md.
+services:
+  - type: web
+    name: punestay
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false                      # paste the Neon connection string (postgresql://...sslmode=require)
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_SETUP_TOKEN
+        generateValue: true              # copy it from the dashboard when you register the admin account
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: PUNE_BBOX
+        value: "18.40,73.62,18.75,74.05"
+      - key: OSRM_URL
+        value: http://localhost:5000     # not running online: the API falls back to router.project-osrm.org
+      - key: NOMINATIM_EMAIL
+        value: ""
+      - key: CORS_ORIGINS
+        value: https://punestay.onrender.com
+      - key: UPLOAD_DIR
+        value: uploads                   # free plan: the disk is wiped on every deploy, so photos are not durable

@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .config import CORS_ORIGINS, OSRM_URL, PUNE_BBOX, UPLOAD_DIR
+from .config import CORS_ORIGINS, FRONTEND_DIST, OSRM_URL, PUNE_BBOX, UPLOAD_DIR
 from .db import close_pool, db_ok
 from .routers import admin, areas, auth, destinations, listings, listings_write, nearby, pois, rents, route, safety
 
@@ -31,9 +31,26 @@ async def lifespan(app: FastAPI):
     close_pool()
 
 
+class StripApiPrefix:
+    """Lets the front end call /api/... on the same origin: /api/listings -> /listings.
+
+    In development Vite proxies /api to this server and strips the prefix itself; in the Docker image the API
+    serves the pages too, so the prefix arrives here and is removed before routing.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope["path"].startswith("/api/"):
+            scope["path"] = scope["path"][4:]
+            scope["raw_path"] = scope["path"].encode()
+        await self.app(scope, receive, send)
+
+
 app = FastAPI(
     title="PuneStay API",
-    version="0.7.0",
+    version="0.8.0",
     description="WebGIS rental map for students and IT workers in Pune.",
     lifespan=lifespan,
 )
@@ -41,6 +58,7 @@ app.add_middleware(
     CORSMiddleware, allow_origins=CORS_ORIGINS, allow_credentials=True,
     allow_methods=["*"], allow_headers=["*"],
 )
+app.add_middleware(StripApiPrefix)
 
 app.include_router(auth.router)
 app.include_router(listings_write.router)   # before the read router so /listings/near is not taken as an id
@@ -61,3 +79,9 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 @app.get("/health", tags=["meta"])
 def health():
     return {"ok": True, "database": db_ok(), "osrm_url": OSRM_URL, "bbox": PUNE_BBOX}
+
+
+# The built pages, mounted last so every API route above wins: / is the home page, /app/ the React app.
+if FRONTEND_DIST.is_dir():
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="site")
+    logging.getLogger("punestay").info("Serving the built front end from %s", FRONTEND_DIST)

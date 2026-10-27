@@ -8,6 +8,8 @@ const apiProxy = {
     changeOrigin: true,
     rewrite: (p) => p.replace(/^\/api/, ''),
   },
+  // Listing photos are served by the API at /uploads/...; online the API serves the pages too, so same origin.
+  '/uploads': { target: process.env.VITE_API_URL || 'http://localhost:8000', changeOrigin: true },
 }
 
 export default defineConfig({

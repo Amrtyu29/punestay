@@ -456,6 +456,12 @@ http://localhost:8080/geoserver/punestay/ows?service=WFS&version=2.0.0&request=G
 http://localhost:8000/nearby?lat=18.5204&lng=73.8567&category=hospital&subcategory=clinic&radius_m=1500&limit=10
 ```
 
+## Deploying online (free)
+
+See [DEPLOY.md](DEPLOY.md): Neon hosts the PostGIS database, a free Render web service builds the `Dockerfile`
+(front end built with Vite, then uvicorn serving the pages at `/`, `/app/` and the API behind `/api/`), and
+`scripts\migrate_to_cloud.ps1` copies the local database up. `render.yaml` is the Render blueprint.
+
 ## Next: Week 8
 
 Polish and presentation: PWA install prompt, Marathi labels, README screenshots, demo video.

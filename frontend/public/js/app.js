@@ -249,6 +249,7 @@
   map.on('click', function (e) { if (document.body.classList.contains('introing')) return; setLocation({ lat: round6(e.latlng.lat), lng: round6(e.latlng.lng), name: 'Dropped pin', source: 'map click', reverse: true }); });
 
   // ======================= location =======================
+  var scanOnLocate = false;   // set by the intro's "Find PGs" / "Use my location": the next location also scans
   function setLocation(loc, opts) {
     opts = opts || {};
     if (!inPune(loc.lat, loc.lng)) {
@@ -276,7 +277,7 @@
     drawRing();
     syncUrl();
     if (!opts.silent) toast('Location set: ' + (loc.name || fmt(loc.lat, loc.lng)), 'ok');
-    if (opts.scan || state.results.length) scan();
+    if (opts.scan || scanOnLocate || state.results.length) { scanOnLocate = false; scan(); }
     if (loc.reverse) reverseName(loc);
     if (typeof refreshAddLocation === 'function') refreshAddLocation();
     return true;
@@ -1125,7 +1126,7 @@
   }
   function startApp(withTour) {
     var intro = $('intro');
-    if (intro.classList.contains('out')) return;
+    if (!intro || intro.classList.contains('out')) return;
     intro.classList.add('out');
     document.body.classList.remove('introing');
     document.body.classList.add('panel-in');
@@ -1136,7 +1137,128 @@
   }
   $('intro-start').addEventListener('click', function () { startApp(false); });
   $('intro-tour').addEventListener('click', function () { startApp(true); });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Enter' && document.body.classList.contains('introing')) startApp(false); });
+  $('ps-replay').addEventListener('click', function () { buildScene(); });
+  // The hero search box hands the term to the real search bar once the intro has gone.
+  $('ps-search').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var term = $('ps-near').value.trim();
+    startApp(false);
+    if (term) { q.value = term; scanOnLocate = true; setTimeout(find, 700); }
+  });
+  $('ps-locate').addEventListener('click', function () { startApp(false); scanOnLocate = true; setTimeout(locate, 700); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' || !document.body.classList.contains('introing')) return;
+    if (e.target && e.target.closest && e.target.closest('#ps-search')) return;   // the form submits itself
+    startApp(false);
+  });
+
+  // ---- the animated scene: skyline, stars, pillars; replayable ----
+  function buildScene() {
+    var scene = $('ps-scene'), hero = $('ps-hero');
+    if (!scene || !hero) return;
+    hero.style.animation = 'none'; void hero.offsetWidth; hero.style.animation = '';   // restart the dusk fade
+    var clone = scene.cloneNode(true);                                                 // restart every CSS animation
+    scene.parentNode.replaceChild(clone, scene);
+    scene = clone;
+    var far = qs('#ps-far', scene), mid = qs('#ps-mid', scene), sky = qs('#ps-skyline', scene);
+    sky.innerHTML = '';
+    qsa('.ps-star', far).forEach(function (s) { s.remove(); });
+    qsa('.ps-pillar', mid).forEach(function (s) { s.remove(); });
+
+    [[6, 14], [14, 44], [22, 10], [31, 32], [40, 16], [48, 50], [55, 12], [63, 36], [70, 20], [78, 56], [86, 32], [93, 12], [18, 66], [60, 70], [34, 76], [88, 74]]
+      .forEach(function (p, k) {
+        var s = document.createElement('span');
+        s.className = 'ps-star';
+        s.style.left = p[0] + '%'; s.style.top = p[1] + 'px';
+        s.style.animation = 'ps-fade 1s ease ' + (1.8 + k * 0.12).toFixed(2) + 's both, ps-twinkle ' +
+          (2 + (k % 4) * 0.6).toFixed(1) + 's ease-in-out ' + (3.2 + k * 0.3).toFixed(1) + 's infinite';
+        far.insertBefore(s, far.firstChild);
+      });
+    [3, 15, 27, 39, 51, 63, 75, 87, 99].forEach(function (x) {
+      var p = document.createElement('span');
+      p.className = 'ps-pillar'; p.style.left = x + '%';
+      mid.insertBefore(p, mid.firstChild);
+    });
+
+    var spec = [
+      { w: 70, h: 140 }, { w: 92, h: 230 }, { w: 62, h: 120, tag: 'Hostel' },
+      { w: 104, h: 270 }, { w: 132, h: 196, pg: true }, { w: 84, h: 250, tag: 'PG · Girls' },
+      { w: 64, h: 136 }, { w: 96, h: 214, tag: 'PG' }, { w: 72, h: 166 }
+    ];
+    var small = window.innerWidth < 640;
+    spec.forEach(function (b, i) {
+      var h = small ? Math.round(b.h * 0.78) : b.h;
+      var wrap = document.createElement('div');
+      wrap.className = 'ps-bwrap' + (b.pg ? ' is-pg' : '');
+      wrap.style.flex = '0 1 ' + b.w + 'px';
+      wrap.style.height = h + 'px';
+      var cols = Math.max(2, Math.floor(b.w / 22));
+      var rows = Math.max(3, Math.floor((h - (b.pg ? 56 : 18)) / 24));
+      var body = document.createElement('div');
+      body.className = 'ps-body';
+      body.style.gridTemplateColumns = 'repeat(' + cols + ', minmax(0, 1fr))';
+      body.style.animationDelay = (b.pg ? 1.0 : 0.15 + i * 0.11) + 's';
+      for (var r = 0; r < rows; r++) {
+        for (var c = 0; c < cols; c++) {
+          var n = r * cols + c;
+          var win = document.createElement('span');
+          win.className = 'ps-win';
+          if (b.pg || (i * 7 + r * 3 + c * 5) % 5 !== 0) {
+            win.classList.add('on');
+            var d = (1.3 + i * 0.07 + ((n * 37) % 23) * 0.04).toFixed(2) + 's';
+            if ((n + i) % 9 === 0) { win.classList.add('flick'); win.style.animationDelay = d + ', ' + (3 + (n % 5) * 0.7).toFixed(1) + 's'; }
+            else { win.style.animationDelay = d; }
+          }
+          body.appendChild(win);
+        }
+      }
+      if (b.pg) {
+        wrap.insertAdjacentHTML('beforeend',
+          '<span class="ps-ring"></span><span class="ps-radius">Within 2 km</span><span class="ps-ripple"></span>' +
+          '<span class="ps-pin"><svg width="46" height="58" viewBox="0 0 46 58"><path d="M23 57S3 36 3 22a20 20 0 0 1 40 0c0 14-20 35-20 35z" fill="#2DD4BF" stroke="#0E1726" stroke-width="2"/><circle cx="23" cy="22" r="8" fill="#0E1726"/></svg></span>' +
+          '<span class="ps-sign">PG</span>');
+      }
+      if (b.tag) {
+        var tag = document.createElement('span');
+        tag.className = 'ps-tag'; tag.textContent = b.tag;
+        tag.style.animationDelay = (3.1 + i * 0.08).toFixed(2) + 's';
+        wrap.appendChild(tag);
+      }
+      wrap.appendChild(body);
+      if (b.pg) wrap.insertAdjacentHTML('beforeend', '<span class="ps-door"></span>');
+      sky.appendChild(wrap);
+    });
+
+    // mouse parallax (desktop only)
+    if (!reducedMotion && window.matchMedia('(pointer: fine)').matches) {
+      var raf = 0;
+      hero.onmousemove = function (e) {
+        if (raf) return;
+        raf = requestAnimationFrame(function () { raf = 0; scene.style.setProperty('--mx', ((e.clientX / window.innerWidth) * 2 - 1).toFixed(3)); });
+      };
+    }
+    qsa('.ps-count').forEach(function (el) { countUp(el, Number(el.dataset.target) || 0); });
+  }
+  // typing placeholder in the hero search box (stops while the user types; ends when the intro is gone)
+  (function typing() {
+    var input = $('ps-near');
+    if (!input || reducedMotion) return;
+    var phrases = ['COEP, Shivajinagar', 'Hinjewadi Phase 1', 'Symbiosis, Viman Nagar', 'MIT-WPU, Kothrud', 'EON IT Park, Kharadi'];
+    var pi = 0, ci = 0, dir = 1, hold = 6;
+    var timer = setInterval(function () {
+      if (!document.body.contains(input)) { clearInterval(timer); return; }
+      if (document.activeElement === input) return;
+      if (hold > 0) { hold--; }
+      else {
+        ci += dir;
+        var len = phrases[pi].length;
+        if (ci >= len) { ci = len; dir = -1; hold = 26; }
+        else if (ci <= 0) { ci = 0; dir = 1; pi = (pi + 1) % phrases.length; hold = 5; }
+      }
+      input.placeholder = 'Near ' + phrases[pi].slice(0, ci);
+    }, 70);
+  })();
+  buildScene();
 
   // ======================= start-up =======================
   var pendingLoc = null;
@@ -1151,7 +1273,10 @@
       .then(function (r) { if (!r.ok) throw new Error('API error ' + r.status); return r.json(); })
       .then(function (s) {
         TYPES[0].count = s.pg || 0; TYPES[1].count = s.hostel || 0;
-        countUp($('stat-services'), s.total || 0); countUp($('stat-types'), s.pg || 0); countUp($('stat-groups'), s.hostel || 0);
+        [['stat-services', s.total], ['stat-types', s.pg], ['stat-groups', s.hostel]].forEach(function (p) {
+          var el = $(p[0]); if (!el) return;                       // the intro may already be gone
+          el.dataset.target = p[1] || 0; countUp(el, p[1] || 0);   // data-target survives a "Replay animation"
+        });
         renderGroupChips();
         $('api-banner').hidden = true;
       })

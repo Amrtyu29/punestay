@@ -8,10 +8,10 @@
   <meta name="theme-color" content="#070b16" />
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
 
-  <!-- fonts: Sora (headings, numbers), Manrope (UI), JetBrains Mono (coordinates) -->
+  <!-- fonts: Sora (headings, numbers), Manrope (UI), JetBrains Mono (coordinates), Plus Jakarta Sans (intro hero) -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet" />
 
   <!-- Leaflet + plugins from CDNs: no build step, no framework -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -24,21 +24,68 @@
 <body>
   <!-- ================= intro screen (every visit) ================= -->
   <div id="intro" class="intro" role="dialog" aria-label="Welcome">
-    <div class="intro-inner">
-      <div class="radar big" aria-hidden="true"><span></span><span></span><span></span><i></i></div>
-      <p class="intro-kicker">Pune · Nearby Services WebGIS</p>
-      <h1 class="intro-title">Ping the city.</h1>
-      <p class="intro-sub">Drop a pin anywhere in Pune and get the nearest PGs and hostels, sorted by distance from PostGIS, with the phone number, the rent where published, and what is around each one.</p>
-      <div class="intro-stats" aria-live="polite">
-        <div><b data-count="0" id="stat-services">0</b><small>places</small></div>
-        <div><b data-count="0" id="stat-types">0</b><small>PGs</small></div>
-        <div><b data-count="0" id="stat-groups">0</b><small>hostels</small></div>
+    <!-- Animated hero: sunset over Pune hills and a fort, metro line, buildings rising with windows lighting up,
+         a pin dropping on the PG building with a 2 km ring, an auto-rickshaw, and a typing search box.
+         The scene is built by app.js (buildScene) so it can be replayed. -->
+    <section class="ps-hero" id="ps-hero">
+      <div class="ps-scene" id="ps-scene" aria-hidden="true">
+        <div class="ps-layer ps-far" id="ps-far">
+          <span class="ps-sun"></span>
+          <span class="ps-moon"></span>
+          <span class="ps-birds"><svg width="70" height="30" viewBox="0 0 70 30" fill="none" stroke="#1E1830" stroke-width="2.2" stroke-linecap="round"><path d="M2 10q5-6 10 0q5-6 10 0"/><path d="M26 4q4-5 8 0q4-5 8 0"/><path d="M44 18q4-5 8 0q4-5 8 0"/></svg></span>
+          <span class="ps-hill" style="left:-6%;width:56%;height:170px;background:#1A2236"></span>
+          <span class="ps-hill" style="right:-6%;width:58%;height:130px;background:#172033"></span>
+          <div class="ps-fort"><i style="left:-10px"></i><i style="right:-10px"></i><b></b></div>
+        </div>
+        <div class="ps-layer ps-mid" id="ps-mid">
+          <div class="ps-beam"></div>
+          <div class="ps-train"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        </div>
+        <div class="ps-layer ps-near">
+          <div class="ps-skyline" id="ps-skyline"></div>
+        </div>
+        <div class="ps-road">
+          <div class="ps-lane"></div>
+          <div class="ps-auto">
+            <div class="ps-auto-body"><div class="ps-auto-roof"></div><div class="ps-auto-base"></div><div class="ps-auto-light"></div></div>
+            <span class="ps-wheel" style="left:8px"></span><span class="ps-wheel" style="right:6px"></span>
+          </div>
+        </div>
       </div>
-      <div class="intro-actions">
-        <button id="intro-start" class="btn primary lg" type="button">Start exploring <span class="kbd">Enter</span></button>
-        <button id="intro-tour" class="btn ghost lg" type="button">Take the tour</button>
+
+      <div class="ps-copy">
+        <span class="ps-eyebrow">PG &amp; HOSTEL FINDER · PUNE</span>
+        <h1 class="ps-title">Your room in Pune, <em>lit up</em> on the map.</h1>
+        <form class="ps-search" id="ps-search" role="search">
+          <label class="ps-sr" for="ps-near">Where do you need to stay near?</label>
+          <div class="ps-field">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F766E" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+            <input id="ps-near" name="q" type="text" autocomplete="off" placeholder="Near your college or office">
+          </div>
+          <button class="ps-btn" type="submit">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            Find PGs
+          </button>
+        </form>
+        <div class="ps-links">
+          <button type="button" id="ps-locate">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l18-8-8 18-2-8-8-2z"/></svg>
+            Use my location
+          </button>
+          <span class="ps-dot" aria-hidden="true">·</span>
+          <button type="button" id="intro-start">Just explore the map <span class="kbd">Enter</span></button>
+          <span class="ps-dot" aria-hidden="true">·</span>
+          <button type="button" id="intro-tour">Take the tour</button>
+          <span class="ps-dot" aria-hidden="true">·</span>
+          <button type="button" id="ps-replay">Replay animation</button>
+        </div>
+        <div class="ps-stats" aria-live="polite">
+          <div><strong class="ps-count" id="stat-services" data-target="0">0</strong><span>PLACES</span></div>
+          <div><strong class="ps-count" id="stat-types" data-target="0">0</strong><span>PGS</span></div>
+          <div><strong class="ps-count" id="stat-groups" data-target="0">0</strong><span>HOSTELS</span></div>
+        </div>
       </div>
-    </div>
+    </section>
   </div>
 
   <!-- ================= the map ================= -->
